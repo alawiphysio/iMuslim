@@ -259,7 +259,7 @@ class AdhkarReaderActivity : Activity() {
                 background = Ui.rounded(this@AdhkarReaderActivity, 0xD90F2E27.toInt(), 20f, 0x33D9B44A)
                 setOnClickListener { tap(i) }
             }
-            val text = Ui.tv(this, dh.text, 21f, Ui.TEXT).apply {
+            val text = Ui.tv(this, dh.text, 25f, Ui.TEXT).apply {
                 setLineSpacing(0f, 1.55f)
                 textDirection = View.TEXT_DIRECTION_RTL
             }

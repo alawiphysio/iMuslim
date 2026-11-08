@@ -536,7 +536,7 @@ class MainActivity : Activity() {
         val aSu = Quran.surah(this, aS)
         val ayahCard = card()
         ayahCard.addView(header("📖 آية اليوم"))
-        ayahCard.addView(tv("﴿${Quran.verseText(aSu, aA - 1)}﴾", 22f, TEXT).also {
+        ayahCard.addView(tv("﴿${Quran.verseText(aSu, aA - 1)}﴾", 30f, TEXT).also {
             it.typeface = resources.getFont(R.font.amiri_quran)
             it.gravity = Gravity.CENTER
             it.setLineSpacing(0f, 1.4f)
