@@ -443,7 +443,28 @@ class SkyView(ctx: Context) : View(ctx) {
         }
     }
 
+    private var bgBitmap: android.graphics.Bitmap? = null
+    private val bgMatrix = android.graphics.Matrix()
+    private val shade = Paint()
+    /** حركة بسيطة للخلفية مع التمرير */
+    var parallax = 0f
+        set(v) { field = v; invalidate() }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        // صورة الموسم من Canva (لو موجودة)
+        bgBitmap = null
+        val res = Pictures.seasonBg(context, Season.current())
+        if (res != 0 && w > 0 && h > 0) try {
+            val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 }
+            val b = android.graphics.BitmapFactory.decodeResource(resources, res, opts)
+            if (b != null) {
+                bgBitmap = b
+                val scale = maxOf(w / b.width.toFloat(), (h * 1.15f) / b.height.toFloat())
+                bgMatrix.setScale(scale, scale)
+                bgMatrix.postTranslate((w - b.width * scale) / 2f, 0f)
+                shade.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x55000000, 0x99000000.toInt(), 0xCC000000.toInt()), null, Shader.TileMode.CLAMP)
+            }
+        } catch (e: OutOfMemoryError) { bgBitmap = null }
         stars.clear()
         val rnd = Random(7)
         val d = resources.displayMetrics.density
@@ -461,6 +482,12 @@ class SkyView(ctx: Context) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        bgBitmap?.let {
+            c.save(); c.translate(0f, -parallax.coerceIn(0f, height * 0.12f))
+            c.drawBitmap(it, bgMatrix, null)
+            c.restore()
+            c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shade)
+        }
         for ((i, s) in stars.withIndex()) {
             val a = 0.25f + 0.75f * ((sin(t * s.speed + s.phase) + 1f) / 2f)
             if (festive) {
@@ -518,6 +545,18 @@ class RingView(ctx: Context) : View(ctx) {
     private var target = 0f
     private var shown = 0f
     private var intro: ValueAnimator? = null
+    private var glow = 1f
+    /** لما يقرب الأذان أو الإقامة (أقل من ١٠ دقائق) النبض يصير أسرع */
+    var urgent = false
+        set(v) { if (field != v) { field = v; breath.duration = if (v) 900 else 2600 } }
+    private val breath = ValueAnimator.ofFloat(0.55f, 1f).apply {
+        duration = 2600
+        repeatCount = ValueAnimator.INFINITE
+        repeatMode = ValueAnimator.REVERSE
+        addUpdateListener { glow = it.animatedValue as Float; invalidate() }
+    }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); breath.start() }
+    override fun onDetachedFromWindow() { breath.cancel(); super.onDetachedFromWindow() }
 
     init { setLayerType(LAYER_TYPE_SOFTWARE, null) } // عشان التوهج BlurMaskFilter
 
@@ -531,16 +570,43 @@ class RingView(ctx: Context) : View(ctx) {
                 addUpdateListener { shown = it.animatedValue as Float; invalidate() }
                 start()
             }
-        } else if (intro?.isRunning != true) {
-            shown = target
-            invalidate()
+        } else if (intro?.isRunning != true && kotlin.math.abs(target - shown) > 0.0005f) {
+            // حركة ناعمة بدل القفز
+            intro = ValueAnimator.ofFloat(shown, target).apply {
+                duration = 900
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { shown = it.animatedValue as Float; invalidate() }
+                start()
+            }
         }
     }
 
     override fun onDraw(c: Canvas) {
         val s = min(width, height).toFloat()
         val stroke = s * 0.045f
-        Art.drawRing(c, width / 2f, height / 2f, s / 2f - stroke * 1.6f, stroke, shown)
+        // هالة تتنفس خلف الحلقة
+        val cx = width / 2f; val cy = height / 2f
+        val haloR = s / 2f
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG)
+        val a = ((if (urgent) 90 else 55) * glow).toInt()
+        halo.shader = RadialGradient(cx, cy, haloR, intArrayOf(0x00D9B44A, Color.argb(a, 217, 180, 74), 0x00D9B44A),
+            floatArrayOf(0.6f, 0.82f, 1f), Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, haloR, halo)
+        Art.drawRing(c, cx, cy, s / 2f - stroke * 1.6f, stroke, shown)
+    }
+}
+
+/** تأثير الضغط: الزر يصغر شوي ويرجع بنعومة */
+object Press {
+    fun apply(v: View) {
+        v.setOnTouchListener { view, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(90).start()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(android.view.animation.OvershootInterpolator(2.5f)).start()
+            }
+            false
+        }
     }
 }
 
@@ -603,7 +669,14 @@ class MosqueView(ctx: Context) : View(ctx) {
 class PrayerIconView(ctx: Context, val prayer: Prayer) : View(ctx) {
     var active = false
         set(v) { field = v; invalidate() }
+    private val img: android.graphics.drawable.Drawable? =
+        Pictures.prayerIcon(ctx, prayer).takeIf { it != 0 }?.let { ctx.getDrawable(it) }
     override fun onDraw(c: Canvas) {
-        Art.drawPrayerIcon(c, prayer, min(width, height).toFloat(), active)
+        val d = img
+        if (d != null) {
+            d.setBounds(0, 0, width, height)
+            d.alpha = if (active) 255 else 150
+            d.draw(c)
+        } else Art.drawPrayerIcon(c, prayer, min(width, height).toFloat(), active)
     }
 }

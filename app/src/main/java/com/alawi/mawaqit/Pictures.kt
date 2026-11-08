@@ -19,6 +19,20 @@ object Pictures {
 
     fun figure(ctx: Context, iqamaPhase: Boolean) = if (iqamaPhase) praying(ctx) else walker(ctx)
 
+    /** خلفية الموسم (أو 0 لو ما فيه صورة) */
+    fun seasonBg(ctx: Context, s: Season): Int = when (s) {
+        Season.FRIDAY -> id(ctx, "bg_friday")
+        Season.RAMADAN -> id(ctx, "bg_ramadan")
+        Season.EID_FITR, Season.EID_ADHA -> id(ctx, "bg_eid")
+        Season.DHUL_HIJJAH, Season.ARAFAH -> id(ctx, "bg_hajj")
+        Season.NORMAL -> 0
+    }
+
+    fun splash(ctx: Context): Int = id(ctx, "img_splash")
+
+    /** أيقونة الصلاة (من Canva) أو 0 */
+    fun prayerIcon(ctx: Context, p: Prayer): Int = id(ctx, "ic_${p.key}")
+
     /** صورة المسجد حسب المدينة، أو 0 لو ما فيه صورة (نستخدم الرسمة) */
     fun landmark(ctx: Context, type: Landmarks.Type): Int = when (type) {
         Landmarks.Type.HARAM -> id(ctx, "img_haram")
