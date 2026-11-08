@@ -30,6 +30,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -57,6 +59,10 @@ class MainActivity : Activity() {
     private lateinit var soundTv: TextView
     private lateinit var fajrSoundTv: TextView
     private lateinit var nextLabelTv: TextView
+    private lateinit var figureIv: ImageView
+    private lateinit var contentRoot: LinearLayout
+    private val muezzinCards = HashMap<String, LinearLayout>()
+    private var lastIqamaPhase: Boolean? = null
     private lateinit var ringCaptionTv: TextView
     private lateinit var minutesTv: TextView
     private lateinit var moonTv: TextView
@@ -150,6 +156,13 @@ class MainActivity : Activity() {
         cityTv.text = "📍 ${prefs.city}"
         dateTv.text = "${Hijri.format(now)}  •  ${Fmt.date(now)}"
         val stName = st.prayer.displayName(st.adhanT)
+        if (lastIqamaPhase != st.iqamaPhase) {
+            lastIqamaPhase = st.iqamaPhase
+            figureIv.setImageResource(if (st.iqamaPhase) R.drawable.fig_praying else R.drawable.fig_walker)
+            figureIv.alpha = 0f; figureIv.scaleX = 0.8f; figureIv.scaleY = 0.8f
+            figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
+                .setInterpolator(DecelerateInterpolator(2f)).start()
+        }
         if (st.iqamaPhase) {
             nextLabelTv.text = "حان وقت الصلاة • استعد للإقامة"
             nextNameTv.text = "صلاة $stName"
@@ -185,6 +198,10 @@ class MainActivity : Activity() {
             if (isNext && pulsedPrayer != p) { pulsedPrayer = p; pulse(rowIcon[p]) }
         }
         soundTv.text = "الصوت الحالي: " + (prefs.adhanName ?: "صوت المنبه الافتراضي (اختر ملف أذان)")
+        for ((id, card) in muezzinCards) {
+            val sel = id == prefs.muezzinId
+            card.background = rounded(if (sel) 0x40D9B44A else 0x1AFFFFFF, 16f, if (sel) GOLD else 0x22FFFFFF)
+        }
         fajrSoundTv.text = "الصوت الحالي: " + (prefs.fajrName ?: "نفس الأذان العادي (اختر أذان الفجر)")
         tick()
     }
@@ -289,6 +306,7 @@ class MainActivity : Activity() {
                     if (it.moveToFirst()) name = it.getString(0)
                 }
             } catch (e: Exception) { }
+            prefs.muezzinId = null
             if (requestCode == REQ_SOUND_FAJR) {
                 prefs.fajrUri = uri.toString()
                 prefs.fajrName = name ?: "أذان الفجر"
@@ -318,6 +336,8 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
         scroll.addView(root)
+        contentRoot = root
+        applyFoldPadding()
 
         // رأس الصفحة: العنوان + المدينة + التاريخ
         root.addView(tv("مواقيت أحمد", 30f, GOLD, true).also {
@@ -339,6 +359,8 @@ class MainActivity : Activity() {
         // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
         nextCard.gravity = Gravity.CENTER_HORIZONTAL
+        figureIv = ImageView(this)
+        nextCard.addView(figureIv, LinearLayout.LayoutParams(dp(110), dp(110)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         nextLabelTv = tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextLabelTv)
         nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }
@@ -431,7 +453,37 @@ class MainActivity : Activity() {
 
         // الصوت: أذان الفجر + أذان باقي الصلوات
         val sound = card()
-        sound.addView(header("صوت الأذان"))
+        sound.addView(header("المؤذن"))
+        sound.addView(tv("اختر الشيخ اللي تحب تسمع أذانه:", 13f, MUTED))
+        val mzScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val mzRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, dp(8)) }
+        for (m in Muezzins.ALL) {
+            val ok = Muezzins.isAvailable(this, m)
+            val c = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                alpha = if (ok) 1f else 0.55f
+                setOnClickListener {
+                    if (Muezzins.select(this@MainActivity, m)) {
+                        refresh()
+                        toast("تم اختيار ${m.name} ✅")
+                        AdhanService.start(this@MainActivity, Prayer.DHUHR, System.currentTimeMillis(), true)
+                    } else {
+                        toast("أذان ${m.name} غير مضاف للتطبيق بعد. اختر ملف من جوالك تحت.")
+                    }
+                }
+            }
+            c.addView(tv("🕌", 26f, TEXT).also { it.gravity = Gravity.CENTER })
+            c.addView(tv(m.name, 13f, TEXT, true).also { it.gravity = Gravity.CENTER })
+            c.addView(tv(if (ok) m.place else "${m.place} • غير متوفر", 11f, MUTED).also { it.gravity = Gravity.CENTER })
+            muezzinCards[m.id] = c
+            mzRow.addView(c, LinearLayout.LayoutParams(dp(130), ViewGroup.LayoutParams.WRAP_CONTENT).also { it.marginEnd = dp(8) })
+        }
+        mzScroll.addView(mzRow)
+        sound.addView(mzScroll)
+        sound.addView(divider())
+        sound.addView(header("أو ملفات من جوالك"))
         sound.addView(tv("أذان الظهر والعصر والمغرب والعشاء", 15f, TEXT, true))
         soundTv = tv("", 13f, MUTED)
         sound.addView(soundTv)
@@ -479,6 +531,28 @@ class MainActivity : Activity() {
         }
         root.addView(loc)
 
+        // التذكير الصوتي
+        val voice = card()
+        voice.addView(header("🗣 التطبيق يكلّمك"))
+        voice.addView(tv("يذكّرك بصوت عربي قبل الأذان، ويقول لك وقت الأذان، وينبهك وقت الإقامة.", 13f, MUTED))
+        voice.addView(switch("التذكير الصوتي", prefs.voiceOn) { prefs.voiceOn = it })
+        voice.addView(textField("يناديك باسم", prefs.userName) { if (it.isNotBlank()) prefs.userName = it.trim() })
+        val vRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        vRow.addView(button("▶ اسمع التذكير") {
+            val (np, nt) = Times.next(this)
+            AdhanService.say(this, np, nt, "تجربة التذكير الصوتي", Voice.before(prefs.userName, np, nt, prefs.preMin))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        vRow.addView(button("تحميل الصوت العربي", outline = true) {
+            try {
+                startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+            } catch (e: Exception) {
+                try { startActivity(Intent("com.android.settings.TTS_SETTINGS")) } catch (e2: Exception) { }
+            }
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        voice.addView(vRow)
+        voice.addView(tv("لو ما سمعت صوت عربي: الإعدادات ← الإدارة العامة ← تحويل النص إلى كلام، واختر محرك Google ولغة العربية.", 12f, MUTED))
+        root.addView(voice)
+
         // البطارية
         val bat = card()
         bat.addView(header("مهم لجوالات سامسونج"))
@@ -502,6 +576,44 @@ class MainActivity : Activity() {
         })
         animateEntrance(root)
         return frame
+    }
+
+    /** شاشة الـ Fold الكبيرة: المحتوى يتوسّط بعرض مريح بدل ما يتمدد */
+    private fun applyFoldPadding() {
+        val wDp = resources.configuration.screenWidthDp
+        val side = if (wDp > 600) ((wDp - 560) / 2).coerceAtLeast(16) else 16
+        contentRoot.setPadding(dp(side), dp(20), dp(side), dp(32))
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (::contentRoot.isInitialized) applyFoldPadding()
+        PrayerWidget.updateAll(this)
+    }
+
+    private fun textField(label: String, value: String, onChange: (String) -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        val e = EditText(this).apply {
+            setText(value)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setTextColor(GOLD)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            background = rounded(0x22000000, 10f, 0x55D9B44A)
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) { onChange(s?.toString() ?: "") }
+            })
+        }
+        row.addView(tv(label, 15f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(e, LinearLayout.LayoutParams(dp(140), ViewGroup.LayoutParams.WRAP_CONTENT))
+        return row
     }
 
     private fun pickSound(req: Int) {
