@@ -90,6 +90,95 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("after_prayer_remind", false)
         set(v) = sp.edit().putBoolean("after_prayer_remind", v).apply()
 
+    // ---------- وضع المسجد ----------
+    var mosqueOn: Boolean
+        get() = sp.getBoolean("mosque_on", false)
+        set(v) = sp.edit().putBoolean("mosque_on", v).apply()
+    var mosqueMin: Int
+        get() = sp.getInt("mosque_min", 25)
+        set(v) = sp.edit().putInt("mosque_min", v).apply()
+    /** true = صامت تام، false = اهتزاز */
+    var mosqueSilent: Boolean
+        get() = sp.getBoolean("mosque_silent", false)
+        set(v) = sp.edit().putBoolean("mosque_silent", v).apply()
+    var mosquePrevMode: Int
+        get() = sp.getInt("mosque_prev", -1)
+        set(v) = sp.edit().putInt("mosque_prev", v).apply()
+    var mosqueSetMode: Int
+        get() = sp.getInt("mosque_set", -1)
+        set(v) = sp.edit().putInt("mosque_set", v).apply()
+
+    // ---------- الإشعار الحي ----------
+    var liveOn: Boolean
+        get() = sp.getBoolean("live_on", true)
+        set(v) = sp.edit().putBoolean("live_on", v).apply()
+
+    // ---------- المناسبات ----------
+    var fridayOn: Boolean
+        get() = sp.getBoolean("friday_on", true)
+        set(v) = sp.edit().putBoolean("friday_on", v).apply()
+    var fastingOn: Boolean
+        get() = sp.getBoolean("fasting_on", true)
+        set(v) = sp.edit().putBoolean("fasting_on", v).apply()
+    var ramadanOn: Boolean
+        get() = sp.getBoolean("ramadan_on", true)
+        set(v) = sp.edit().putBoolean("ramadan_on", v).apply()
+    var suhoorMin: Int
+        get() = sp.getInt("suhoor_min", 45)
+        set(v) = sp.edit().putInt("suhoor_min", v).apply()
+    var qiyamOn: Boolean
+        get() = sp.getBoolean("qiyam_on", false)
+        set(v) = sp.edit().putBoolean("qiyam_on", v).apply()
+
+    // ---------- السفر ----------
+    var homeLat: Double
+        get() = sp.getString("home_lat", null)?.toDoubleOrNull() ?: lat
+        set(v) = sp.edit().putString("home_lat", v.toString()).apply()
+    var homeLng: Double
+        get() = sp.getString("home_lng", null)?.toDoubleOrNull() ?: lng
+        set(v) = sp.edit().putString("home_lng", v.toString()).apply()
+    var homeCity: String
+        get() = sp.getString("home_city", null) ?: city
+        set(v) = sp.edit().putString("home_city", v).apply()
+    val hasHome: Boolean get() = sp.contains("home_lat")
+    var travelNotified: Boolean
+        get() = sp.getBoolean("travel_notified", false)
+        set(v) = sp.edit().putBoolean("travel_notified", v).apply()
+
+    // ---------- المسبحة ----------
+    var tasbihPhrase: Int
+        get() = sp.getInt("tasbih_phrase", 0)
+        set(v) = sp.edit().putInt("tasbih_phrase", v).apply()
+    var tasbihTarget: Int
+        get() = sp.getInt("tasbih_target", 33)
+        set(v) = sp.edit().putInt("tasbih_target", v).apply()
+    var tasbihCount: Int
+        get() = sp.getInt("tasbih_count", 0)
+        set(v) = sp.edit().putInt("tasbih_count", v).apply()
+    var tasbihDayKey: String
+        get() = sp.getString("tasbih_day", "")!!
+        set(v) = sp.edit().putString("tasbih_day", v).apply()
+    var tasbihToday: Int
+        get() = sp.getInt("tasbih_today", 0)
+        set(v) = sp.edit().putInt("tasbih_today", v).apply()
+    var tasbihTotal: Long
+        get() = sp.getLong("tasbih_total", 0L)
+        set(v) = sp.edit().putLong("tasbih_total", v).apply()
+
+    /** كل الإعدادات (للنسخ الاحتياطي) */
+    fun dump(): Map<String, *> = sp.all
+    fun restore(map: Map<String, Any?>) {
+        val e = sp.edit()
+        for ((k, v) in map) when (v) {
+            is Boolean -> e.putBoolean(k, v)
+            is Int -> e.putInt(k, v)
+            is Long -> e.putLong(k, v)
+            is Float -> e.putFloat(k, v)
+            is String -> e.putString(k, v)
+        }
+        e.apply()
+    }
+
     var muezzinId: String?
         get() = sp.getString("muezzin_id", null)
         set(v) = sp.edit().putString("muezzin_id", v).apply()
