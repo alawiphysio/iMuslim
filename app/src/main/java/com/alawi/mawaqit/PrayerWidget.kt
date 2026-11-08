@@ -54,8 +54,9 @@ class PrayerWidget : AppWidgetProvider() {
 
         fun updateAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
-            val ids = mgr.getAppWidgetIds(ComponentName(ctx, PrayerWidget::class.java))
-            if (ids == null || ids.isEmpty()) {
+            val ids = mgr.getAppWidgetIds(ComponentName(ctx, PrayerWidget::class.java)) ?: IntArray(0)
+            val small = mgr.getAppWidgetIds(ComponentName(ctx, CompactWidget::class.java)) ?: IntArray(0)
+            if (ids.isEmpty() && small.isEmpty()) {
                 cancelMinuteTick(ctx)
                 return
             }
@@ -63,7 +64,27 @@ class PrayerWidget : AppWidgetProvider() {
             for (id in ids) {
                 try { mgr.updateAppWidget(id, build(ctx, mgr, id, now)) } catch (e: Exception) { }
             }
+            if (small.isNotEmpty()) {
+                try { mgr.updateAppWidget(small, buildSmall(ctx, now)) } catch (e: Exception) { }
+            }
             scheduleMinuteTick(ctx, now)
+        }
+
+        /** الويدجت الصغيرة (مناسبة للشاشة الخارجية للـ Fold) */
+        private fun buildSmall(ctx: Context, now: Long): RemoteViews {
+            val st = Times.state(ctx, now)
+            val rv = RemoteViews(ctx.packageName, R.layout.widget_small)
+            val name = st.prayer.displayName(st.adhanT)
+            val mins = ((st.target - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+            rv.setTextViewText(R.id.s_name, if (st.iqamaPhase) "إقامة $name" else name)
+            rv.setTextViewText(R.id.s_time, if (st.iqamaPhase) "الإقامة ${Fmt.time(st.iqamaT)}" else "الأذان ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}")
+            rv.setTextViewText(R.id.s_min, Fmt.num(mins))
+            val scale = ctx.resources.displayMetrics.density.coerceAtMost(2.5f)
+            rv.setImageViewBitmap(R.id.s_ring, Art.widgetRing((62 * scale).toInt(), st.progress))
+            rv.setImageViewResource(R.id.s_figure, Pictures.figure(ctx, st.iqamaPhase))
+            rv.setOnClickPendingIntent(R.id.s_root, PendingIntent.getActivity(ctx, 11, Intent(ctx, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            return rv
         }
 
         private fun build(ctx: Context, mgr: AppWidgetManager, id: Int, now: Long): RemoteViews {
@@ -158,5 +179,16 @@ class PrayerWidget : AppWidgetProvider() {
         private fun cancelMinuteTick(ctx: Context) {
             ctx.getSystemService(AlarmManager::class.java)?.cancel(tickIntent(ctx))
         }
+    }
+}
+
+/** ويدجت صغيرة: الصلاة القادمة + العدّاد (مناسبة للشاشة الخارجية) */
+class CompactWidget : AppWidgetProvider() {
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+        PrayerWidget.updateAll(ctx)
+        Scheduler.scheduleNext(ctx)
+    }
+    override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle?) {
+        PrayerWidget.updateAll(ctx)
     }
 }

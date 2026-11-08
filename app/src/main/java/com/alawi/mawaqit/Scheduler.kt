@@ -79,7 +79,10 @@ object Times {
     }
 }
 
-enum class EvType { PRE, ADHAN, IQAMA, REFRESH, ADHKAR_MORNING, ADHKAR_EVENING, AFTER_PRAYER }
+enum class EvType {
+    PRE, ADHAN, IQAMA, REFRESH, ADHKAR_MORNING, ADHKAR_EVENING, AFTER_PRAYER,
+    MOSQUE_START, MOSQUE_END, FRIDAY_KAHF, FRIDAY_HOUR, FAST_EVE, SUHOOR, IFTAR, QIYAM
+}
 
 data class Ev(val time: Long, val type: EvType, val prayer: Prayer?)
 
@@ -87,25 +90,52 @@ object Scheduler {
     const val EXTRA_TYPE = "ev_type"
     const val EXTRA_PRAYER = "ev_prayer"
     const val EXTRA_TIME = "ev_time"
+    private const val MIN = 60_000L
 
     fun events(ctx: Context, now: Long): List<Ev> {
         val prefs = Prefs(ctx)
         val list = ArrayList<Ev>()
         for (d in 0..1) {
             val arr = Times.forDay(ctx, d, now)
+            val day = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_MONTH, d); set(Calendar.HOUR_OF_DAY, 12) }
+            val friday = day.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY
+            val ramadan = Hijri.isRamadan(day.timeInMillis)
             for (p in Prayer.FIVE) {
                 val t = arr[p.ordinal]
                 // حدث الأذان يُضاف دائماً لتحديث الويدجت، والصوت يشتغل فقط إذا كان مفعّل
                 list.add(Ev(t, EvType.ADHAN, p))
-                val iq = t + prefs.iqamaMin(p) * 60_000L
-                if (prefs.adhkarRemind && p == Prayer.FAJR) list.add(Ev(iq + 20 * 60_000L, EvType.ADHKAR_MORNING, p))
-                if (prefs.adhkarRemind && p == Prayer.ASR) list.add(Ev(iq + 20 * 60_000L, EvType.ADHKAR_EVENING, p))
-                if (prefs.afterPrayerRemind) list.add(Ev(iq + 10 * 60_000L, EvType.AFTER_PRAYER, p))
+                val iq = t + prefs.iqamaMin(p) * MIN
+                if (prefs.adhkarRemind && p == Prayer.FAJR) list.add(Ev(iq + 20 * MIN, EvType.ADHKAR_MORNING, p))
+                if (prefs.adhkarRemind && p == Prayer.ASR) list.add(Ev(iq + 20 * MIN, EvType.ADHKAR_EVENING, p))
+                if (prefs.afterPrayerRemind) list.add(Ev(iq + 10 * MIN, EvType.AFTER_PRAYER, p))
                 if (prefs.adhanOn(p)) {
-                    if (prefs.preOn && prefs.preMin > 0) list.add(Ev(t - prefs.preMin * 60_000L, EvType.PRE, p))
-                    if (prefs.iqamaOn && prefs.iqamaMin(p) > 0) list.add(Ev(t + prefs.iqamaMin(p) * 60_000L, EvType.IQAMA, p))
+                    if (prefs.preOn && prefs.preMin > 0) list.add(Ev(t - prefs.preMin * MIN, EvType.PRE, p))
+                    if (prefs.iqamaOn && prefs.iqamaMin(p) > 0) list.add(Ev(iq, EvType.IQAMA, p))
+                }
+                // وضع المسجد: الجمعة يبدأ من الأذان (الخطبة) ويطول ساعة
+                if (prefs.mosqueOn) {
+                    if (friday && p == Prayer.DHUHR) {
+                        list.add(Ev(t + MIN, EvType.MOSQUE_START, p))
+                        list.add(Ev(t + 60 * MIN, EvType.MOSQUE_END, p))
+                    } else {
+                        list.add(Ev(iq, EvType.MOSQUE_START, p))
+                        list.add(Ev(iq + prefs.mosqueMin * MIN, EvType.MOSQUE_END, p))
+                    }
                 }
             }
+            if (prefs.fridayOn && friday) {
+                list.add(Ev(arr[Prayer.SUNRISE.ordinal] + 2 * 60 * MIN, EvType.FRIDAY_KAHF, Prayer.DHUHR))
+                list.add(Ev(arr[Prayer.MAGHRIB.ordinal] - 45 * MIN, EvType.FRIDAY_HOUR, Prayer.MAGHRIB))
+            }
+            if (prefs.fastingOn) {
+                val tomorrow = day.timeInMillis + 24 * 60 * MIN
+                if (Fasting.reason(tomorrow) != null) list.add(Ev(arr[Prayer.ISHA.ordinal] + 45 * MIN, EvType.FAST_EVE, Prayer.ISHA))
+            }
+            if (prefs.ramadanOn && ramadan) {
+                list.add(Ev(arr[Prayer.FAJR.ordinal] - prefs.suhoorMin * MIN, EvType.SUHOOR, Prayer.FAJR))
+                list.add(Ev(arr[Prayer.MAGHRIB.ordinal] - MIN, EvType.IFTAR, Prayer.MAGHRIB))
+            }
+            if (prefs.qiyamOn) list.add(Ev(Night.lastThird(ctx, d, now), EvType.QIYAM, Prayer.FAJR))
         }
         // تحديث بعد منتصف الليل لتغيير التاريخ
         val mid = Calendar.getInstance()
@@ -117,6 +147,10 @@ object Scheduler {
 
         return list.filter { it.time > now + 1000 }.sortedBy { it.time }
     }
+
+    /** كل الأحداث اللي وقتها يطابق وقت التنبيه (عشان لو تزامن حدثين ما يضيع واحد) */
+    fun eventsAt(ctx: Context, t: Long): List<Ev> =
+        events(ctx, t - 5_000L).filter { kotlin.math.abs(it.time - t) < 2_000L }
 
     fun scheduleNext(ctx: Context) {
         val now = System.currentTimeMillis()

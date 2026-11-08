@@ -62,6 +62,14 @@ class MainActivity : Activity() {
     private lateinit var figureIv: ImageView
     private lateinit var landmarkImg: ImageView
     private lateinit var betweenBtn: Button
+    private val rowMark = HashMap<Prayer, TextView>()
+    private lateinit var statsTv: TextView
+    private lateinit var weekDots: LinearLayout
+    private lateinit var extraTimesTv: TextView
+    private lateinit var ramadanCard: LinearLayout
+    private lateinit var ramadanTv: TextView
+    private lateinit var travelCard: LinearLayout
+    private lateinit var travelTv: TextView
     private lateinit var contentRoot: LinearLayout
     private val muezzinCards = HashMap<String, LinearLayout>()
     private var lastIqamaPhase: Boolean? = null
@@ -126,6 +134,7 @@ class MainActivity : Activity() {
         val handle = { loc: Location? ->
             val changed = if (loc != null) AutoLocation.apply(this, loc) else AutoLocation.updateFromLastKnown(this)
             if (changed) {
+                Travel.check(this)
                 refresh(); reschedule()
                 handler.postDelayed({ refresh(); toast("تم تحديث الأوقات حسب موقعك: ${prefs.city}") }, 2500)
             }
@@ -147,6 +156,7 @@ class MainActivity : Activity() {
     private fun reschedule() {
         Scheduler.scheduleNext(this)
         PrayerWidget.updateAll(this)
+        LiveNotif.update(this)
     }
 
     private fun refresh() {
@@ -209,6 +219,31 @@ class MainActivity : Activity() {
             rowIcon[p]?.active = isNext
             if (isNext && pulsedPrayer != p) { pulsedPrayer = p; pulse(rowIcon[p]) }
         }
+        // متابعة الصلوات
+        val todayKey = Tracker.dayKey(now)
+        for (p in Prayer.FIVE) {
+            rowMark[p]?.text = when (Tracker.get(this, todayKey, p)) { 1 -> "✓"; 2 -> "👥"; else -> if (today[p.ordinal] <= now) "○" else "" }
+        }
+        refreshStats(now)
+        // الضحى والثلث الأخير
+        val (dS, dE) = Night.duha(this, now)
+        extraTimesTv.text = "☀️ الضحى: ${Fmt.time(dS)} – ${Fmt.time(dE)}\n🌌 الثلث الأخير من الليل: ${Fmt.time(Night.lastThird(this, 0, now))}"
+        // رمضان
+        if (Hijri.isRamadan(now)) {
+            ramadanCard.visibility = View.VISIBLE
+            val fajr = today[Prayer.FAJR.ordinal]; val maghrib = today[Prayer.MAGHRIB.ordinal]
+            ramadanTv.text = if (now < maghrib && now >= fajr - 10 * 60_000L)
+                "🌅 الإفطار ${Fmt.time(maghrib)} • باقي ${Fmt.minutesLeft(maghrib - now)}\nالإمساك كان ${Fmt.time(fajr - 10 * 60_000L)}"
+            else {
+                val f2 = if (now < fajr) fajr else Times.forDay(this, 1, now)[Prayer.FAJR.ordinal]
+                "🍽 الإمساك ${Fmt.time(f2 - 10 * 60_000L)} • الفجر ${Fmt.time(f2)}\nباقي على الفجر ${Fmt.minutesLeft(f2 - now)}"
+            }
+        } else ramadanCard.visibility = View.GONE
+        // السفر
+        if (Travel.isTraveling(this)) {
+            travelCard.visibility = View.VISIBLE
+            travelTv.text = "تبعد ${Fmt.num(Travel.distanceKm(prefs).toInt())} كم عن ${prefs.homeCity}. يجوز لك قصر الصلاة الرباعية ركعتين، والجمع بين الظهر والعصر، والمغرب والعشاء. (المسافة المعتبرة عند جمهور العلماء نحو ٨٠ كم)"
+        } else travelCard.visibility = View.GONE
         soundTv.text = "الصوت الحالي: " + (prefs.adhanName ?: "صوت المنبه الافتراضي (اختر ملف أذان)")
         for ((id, card) in muezzinCards) {
             val sel = id == prefs.muezzinId
@@ -288,6 +323,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) { null }
             runOnUiThread {
                 prefs.city = name ?: String.format(Locale.US, "%.3f، %.3f", loc.latitude, loc.longitude)
+                Travel.check(this)
                 refresh()
                 reschedule()
                 toast("تم تحديث الموقع: ${prefs.city}")
@@ -307,6 +343,14 @@ class MainActivity : Activity() {
     @Deprecated("Activity API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if ((requestCode == REQ_EXPORT || requestCode == REQ_IMPORT) && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            if (requestCode == REQ_EXPORT) toast(if (Backup.export(this, uri)) "تم حفظ النسخة الاحتياطية ✅" else "ما قدرت أحفظ النسخة")
+            else {
+                if (Backup.import(this, uri)) { toast("تم استرجاع إعداداتك ✅"); recreate() } else toast("الملف غير صالح")
+            }
+            return
+        }
         if ((requestCode == REQ_SOUND || requestCode == REQ_SOUND_FAJR) && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             try {
@@ -421,6 +465,44 @@ class MainActivity : Activity() {
         nextCard.addView(betweenBtn)
         root.addView(nextCard)
 
+        // رمضان (يظهر في رمضان بس)
+        ramadanCard = card().apply { visibility = View.GONE }
+        ramadanCard.addView(header("🌙 رمضان كريم"))
+        ramadanTv = tv("", 16f, TEXT, true)
+        ramadanCard.addView(ramadanTv)
+        ramadanCard.addView(button("🤲 دعاء الإفطار") { Adhkar.open(this, 68) })
+        root.addView(ramadanCard)
+
+        // السفر (يظهر لما تكون مسافر)
+        travelCard = card().apply { visibility = View.GONE }
+        travelCard.addView(header("✈️ أنت مسافر"))
+        travelTv = tv("", 13f, TEXT)
+        travelCard.addView(travelTv)
+        travelCard.addView(button("📍 هذي مدينتي الحين", outline = true) { Travel.setHomeHere(this); refresh(); toast("تم حفظ ${prefs.city} كمدينتك") })
+        root.addView(travelCard)
+
+        // اختصارات
+        val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun tile(icon: String, label: String, onClick: () -> Unit): View = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(14), dp(6), dp(12))
+            background = rounded(0xCC0F2E27.toInt(), 20f, 0x40D9B44A)
+            addView(tv(icon, 28f, TEXT).also { it.gravity = Gravity.CENTER })
+            addView(tv(label, 13f, GOLD, true).also { it.gravity = Gravity.CENTER })
+            setOnClickListener { onClick() }
+        }
+        val tiles = listOf(
+            tile("🕋", "القبلة") { startActivity(Intent(this, QiblaActivity::class.java)) },
+            tile("📿", "المسبحة") { startActivity(Intent(this, TasbihActivity::class.java)) },
+            tile("🏰", "الأذكار") { startActivity(Intent(this, AdhkarActivity::class.java)) },
+            tile("☀️", "أذكار اليوم") { Adhkar.open(this, Adhkar.MORNING_EVENING) }
+        )
+        tiles.forEachIndexed { i, t ->
+            quick.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i < tiles.size - 1) it.marginEnd = dp(8) })
+        }
+        root.addView(quick, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(14) })
+
         // حصن المسلم
         val hisn = card()
         hisn.addView(header("🏰 حصن المسلم"))
@@ -473,10 +555,34 @@ class MainActivity : Activity() {
             col.addView(time); col.addView(iq)
             row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(col)
+            if (p.hasAdhan) {
+                val mark = tv("", 18f, GOLD, true).also { it.gravity = Gravity.CENTER }
+                row.addView(mark, LinearLayout.LayoutParams(dp(34), dp(34)).also { it.marginStart = dp(8) })
+                rowMark[p] = mark
+                row.setOnClickListener {
+                    val v = Tracker.cycle(this, Tracker.dayKey(System.currentTimeMillis()), p)
+                    it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                    toast(when (v) { 1 -> "✓ صليت ${p.ar}"; 2 -> "👥 صليت ${p.ar} في جماعة"; else -> "تم إلغاء التأشير" })
+                    refresh()
+                }
+            }
             rowName[p] = name; rowTime[p] = time; rowIqama[p] = iq; rowBox[p] = row; rowIcon[p] = icon
             timesCard.addView(row)
         }
+        extraTimesTv = tv("", 13f, MUTED).also { it.setPadding(dp(12), dp(10), dp(12), 0) }
+        timesCard.addView(extraTimesTv)
+        timesCard.addView(tv("اضغط على الصلاة بعد ما تصليها: مرة = صليت ✓، مرتين = جماعة 👥", 11f, MUTED).also { it.setPadding(dp(12), dp(6), dp(12), 0) })
         root.addView(timesCard)
+
+        // إحصائيات صلواتي
+        val stats = card()
+        stats.addView(header("📊 صلواتي"))
+        statsTv = tv("", 14f, TEXT)
+        stats.addView(statsTv)
+        weekDots = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0) }
+        stats.addView(weekDots)
+        stats.addView(tv("🟢 صليت  🟡 جماعة  ⚪ ما تأشّرت", 11f, MUTED).also { it.setPadding(0, dp(8), 0, 0) })
+        root.addView(stats)
 
         // بطاقة التنبيهات
         val alerts = card()
@@ -575,6 +681,41 @@ class MainActivity : Activity() {
             })
         }
         root.addView(loc)
+
+        // وضع المسجد
+        val mosque = card()
+        mosque.addView(header("🕌 وضع المسجد"))
+        mosque.addView(tv("الجوال يصير على الاهتزاز تلقائياً وقت الإقامة، ويرجع عادي بعد الصلاة. يوم الجمعة يبدأ من الأذان لمدة ساعة (الخطبة).", 13f, MUTED))
+        mosque.addView(switch("تفعيل وضع المسجد", prefs.mosqueOn) { prefs.mosqueOn = it; reschedule() })
+        mosque.addView(numberField("المدة (دقيقة)", prefs.mosqueMin, false) { prefs.mosqueMin = it.coerceIn(5, 90); reschedule() })
+        mosque.addView(switch("صامت تام بدل الاهتزاز", prefs.mosqueSilent) { prefs.mosqueSilent = it })
+        mosque.addView(tv("الصامت التام يحتاج إذن «عدم الإزعاج» من الوضع القوي تحت. ولما يكون وضع المسجد شغال، تنبيه الإقامة ما يتكلم بصوت.", 11f, MUTED))
+        root.addView(mosque)
+
+        // المناسبات والتذكيرات
+        val occ = card()
+        occ.addView(header("📅 المناسبات والتذكيرات"))
+        occ.addView(switch("📌 عدّاد الصلاة في شريط الإشعارات", prefs.liveOn) { prefs.liveOn = it; LiveNotif.update(this) })
+        occ.addView(switch("📖 الجمعة: الكهف وساعة الاستجابة", prefs.fridayOn) { prefs.fridayOn = it; reschedule() })
+        occ.addView(switch("🌙 تذكير الصيام (الاثنين والخميس، الأيام البيض، عرفة، عاشوراء)", prefs.fastingOn) { prefs.fastingOn = it; reschedule() })
+        occ.addView(switch("🍽 رمضان: السحور والإفطار", prefs.ramadanOn) { prefs.ramadanOn = it; reschedule() })
+        occ.addView(numberField("تذكير السحور قبل الفجر بـ (دقيقة)", prefs.suhoorMin, false) { prefs.suhoorMin = it.coerceIn(10, 180); reschedule() })
+        occ.addView(switch("🌌 قيام الليل (الثلث الأخير)", prefs.qiyamOn) { prefs.qiyamOn = it; reschedule() })
+        root.addView(occ)
+
+        // النسخ الاحتياطي والساعة
+        val bk = card()
+        bk.addView(header("☁️ النسخ الاحتياطي"))
+        bk.addView(tv("إعداداتك تنحفظ تلقائياً في نسخة Google الاحتياطية للجوال. وتقدر كمان تحفظ ملف بنفسك (في Google Drive مثلاً) وتسترجعه لو غيّرت جوالك.", 13f, MUTED))
+        val bRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        bRow.addView(button("💾 حفظ نسخة") { backupPick(REQ_EXPORT) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        bRow.addView(button("📥 استرجاع", outline = true) { backupPick(REQ_IMPORT) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bk.addView(bRow)
+        bk.addView(divider())
+        bk.addView(tv("⌚ ساعة سامسونج: تنبيهات الأذان والإقامة والتذكيرات توصل لساعتك تلقائياً وتهتز فيها، بشرط إن تطبيق Galaxy Wearable مسموح له بإشعارات «مواقيت أحمد».", 13f, MUTED))
+        root.addView(bk)
 
         // الوضع القوي: صامت + عدم إزعاج
         val strong = card()
@@ -684,6 +825,39 @@ class MainActivity : Activity() {
         row.addView(tv(label, 15f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(e, LinearLayout.LayoutParams(dp(140), ViewGroup.LayoutParams.WRAP_CONTENT))
         return row
+    }
+
+    private fun refreshStats(now: Long) {
+        val w = Tracker.week(this, now)
+        val streak = Tracker.fajrStreak(this, now)
+        statsTv.text = "آخر ٧ أيام: صليت ${Fmt.num(w.prayed)} من ${Fmt.num(w.total)} • في جماعة ${Fmt.num(w.jamaah)}\n🌅 الفجر متواصل: ${Fmt.num(streak)} ${if (streak in 3..10) "أيام" else "يوم"}" +
+            if (streak >= 7) " ما شاء الله 🔥" else ""
+        weekDots.removeAllViews()
+        for (d in -6..0) {
+            val c = java.util.Calendar.getInstance(); c.timeInMillis = now; c.add(java.util.Calendar.DAY_OF_MONTH, d)
+            val key = Tracker.dayKey(c.timeInMillis)
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+            col.addView(tv(java.text.SimpleDateFormat("EEE", Locale("ar")).format(c.time), 10f, MUTED).also { it.gravity = Gravity.CENTER })
+            for (p in Prayer.FIVE) {
+                val v = Tracker.get(this, key, p)
+                col.addView(View(this).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(when (v) { 2 -> GOLD; 1 -> 0xFF34D399.toInt(); else -> 0x26FFFFFF })
+                    }
+                }, LinearLayout.LayoutParams(dp(12), dp(12)).also { it.topMargin = dp(4) })
+            }
+            weekDots.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+    }
+
+    private fun backupPick(req: Int) {
+        val i = if (req == REQ_EXPORT) Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "mawaqit-backup-${Tracker.dayKey(System.currentTimeMillis())}.json")
+        } else Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }
+        @Suppress("DEPRECATION")
+        startActivityForResult(i, req)
     }
 
     private fun pickSound(req: Int) {
@@ -814,5 +988,7 @@ class MainActivity : Activity() {
         const val REQ_LOC = 2
         const val REQ_SOUND = 3
         const val REQ_SOUND_FAJR = 4
+        const val REQ_EXPORT = 5
+        const val REQ_IMPORT = 6
     }
 }

@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">مواقيت أحمد</string>
     <string name="widget_name">مواقيت الصلاة</string>
+    <string name="tasbih_widget">المسبحة</string>
+    <string name="small_widget">الصلاة القادمة (صغيرة)</string>
 </resources>
