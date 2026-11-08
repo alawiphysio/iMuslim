@@ -17,6 +17,11 @@ class AlarmReceiver : BroadcastReceiver() {
         val p = Prayer.byKey(intent.getStringExtra(Scheduler.EXTRA_PRAYER))
         val t = intent.getLongExtra(Scheduler.EXTRA_TIME, System.currentTimeMillis())
 
+        // قبل التنبيهات (غير الأذان نفسه) نتأكد إنك ما انتقلت لمدينة ثانية
+        if (type != EvType.ADHAN) {
+            try { AutoLocation.updateFromLastKnown(ctx) } catch (e: Exception) { }
+        }
+
         try {
             when (type) {
                 EvType.ADHAN -> if (p != null && prefs.adhanOn(p)) AdhanService.start(ctx, p, t)
@@ -45,6 +50,7 @@ class AlarmReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         Notifier.ensureChannels(ctx)
+        try { AutoLocation.updateFromLastKnown(ctx) } catch (e: Exception) { }
         Scheduler.scheduleNext(ctx)
         PrayerWidget.updateAll(ctx)
     }
