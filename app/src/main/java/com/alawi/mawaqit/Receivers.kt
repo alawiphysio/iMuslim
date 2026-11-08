@@ -59,7 +59,7 @@ class BootReceiver : BroadcastReceiver() {
 }
 
 object Notifier {
-    const val CH_ADHAN = "adhan_v1"
+    const val CH_ADHAN = "adhan_v2"
     const val CH_REMIND = "remind_v1"
 
     fun ensureChannels(ctx: Context) {
@@ -68,6 +68,10 @@ object Notifier {
             description = "إشعار وقت الأذان (الصوت يشتغل من التطبيق)"
             setSound(null, null)
             enableVibration(true)
+            vibrationPattern = longArrayOf(0, 800, 400, 800, 400, 800)
+            setBypassDnd(true)
+            enableLights(true)
+            lightColor = 0xFFD9B44A.toInt()
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         val remind = NotificationChannel(CH_REMIND, "تنبيهات قبل الأذان والإقامة", NotificationManager.IMPORTANCE_HIGH).apply {
