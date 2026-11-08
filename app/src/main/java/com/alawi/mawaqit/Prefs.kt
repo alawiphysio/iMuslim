@@ -80,6 +80,16 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("fullscreen_on", true)
         set(v) = sp.edit().putBoolean("fullscreen_on", v).apply()
 
+    /** تذكير أذكار الصباح (بعد الفجر) والمساء (بعد العصر) */
+    var adhkarRemind: Boolean
+        get() = sp.getBoolean("adhkar_remind", true)
+        set(v) = sp.edit().putBoolean("adhkar_remind", v).apply()
+
+    /** تذكير الأذكار بعد كل صلاة */
+    var afterPrayerRemind: Boolean
+        get() = sp.getBoolean("after_prayer_remind", false)
+        set(v) = sp.edit().putBoolean("after_prayer_remind", v).apply()
+
     var muezzinId: String?
         get() = sp.getString("muezzin_id", null)
         set(v) = sp.edit().putString("muezzin_id", v).apply()

@@ -61,6 +61,7 @@ class MainActivity : Activity() {
     private lateinit var nextLabelTv: TextView
     private lateinit var figureIv: ImageView
     private lateinit var landmarkImg: ImageView
+    private lateinit var betweenBtn: Button
     private lateinit var contentRoot: LinearLayout
     private val muezzinCards = HashMap<String, LinearLayout>()
     private var lastIqamaPhase: Boolean? = null
@@ -164,6 +165,7 @@ class MainActivity : Activity() {
             figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
                 .setInterpolator(DecelerateInterpolator(2f)).start()
         }
+        betweenBtn.text = if (st.iqamaPhase) "📿 الدعاء بين الأذان والإقامة لا يُرد" else "📿 أذكار الأذان"
         if (st.iqamaPhase) {
             nextLabelTv.text = "حان وقت الصلاة • استعد للإقامة"
             nextNameTv.text = "صلاة $stName"
@@ -415,7 +417,29 @@ class MainActivity : Activity() {
         nextTimeTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
         nextCard.addView(minutesTv)
         nextCard.addView(nextTimeTv)
+        betweenBtn = button("📿 أذكار الأذان والدعاء قبل الإقامة") { Adhkar.open(this, Adhkar.ADHAN) }
+        nextCard.addView(betweenBtn)
         root.addView(nextCard)
+
+        // حصن المسلم
+        val hisn = card()
+        hisn.addView(header("🏰 حصن المسلم"))
+        hisn.addView(tv("الأذكار كاملة مع عدّاد، وتسمعها بصوت حمد الدريهم", 13f, MUTED))
+        val hRow1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        hRow1.addView(button("☀️ الصباح والمساء") { Adhkar.open(this, Adhkar.MORNING_EVENING) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        hRow1.addView(button("🤲 بعد الصلاة") { Adhkar.open(this, Adhkar.AFTER_PRAYER) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        hisn.addView(hRow1)
+        val hRow2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        hRow2.addView(button("🌙 النوم", outline = true) { Adhkar.open(this, Adhkar.SLEEP) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        hRow2.addView(button("📖 كل الأذكار", outline = true) { startActivity(Intent(this, AdhkarActivity::class.java)) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        hisn.addView(hRow2)
+        hisn.addView(switch("ذكّرني بأذكار الصباح والمساء", prefs.adhkarRemind) { prefs.adhkarRemind = it; reschedule() })
+        hisn.addView(switch("ذكّرني بالأذكار بعد كل صلاة", prefs.afterPrayerRemind) { prefs.afterPrayerRemind = it; reschedule() })
+        root.addView(hisn)
 
         // بطاقة منازل القمر: رسمة القمر الحقيقية + المعلومات
         val moonCard = card()

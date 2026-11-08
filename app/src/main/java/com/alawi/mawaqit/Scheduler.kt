@@ -79,7 +79,7 @@ object Times {
     }
 }
 
-enum class EvType { PRE, ADHAN, IQAMA, REFRESH }
+enum class EvType { PRE, ADHAN, IQAMA, REFRESH, ADHKAR_MORNING, ADHKAR_EVENING, AFTER_PRAYER }
 
 data class Ev(val time: Long, val type: EvType, val prayer: Prayer?)
 
@@ -97,6 +97,10 @@ object Scheduler {
                 val t = arr[p.ordinal]
                 // حدث الأذان يُضاف دائماً لتحديث الويدجت، والصوت يشتغل فقط إذا كان مفعّل
                 list.add(Ev(t, EvType.ADHAN, p))
+                val iq = t + prefs.iqamaMin(p) * 60_000L
+                if (prefs.adhkarRemind && p == Prayer.FAJR) list.add(Ev(iq + 20 * 60_000L, EvType.ADHKAR_MORNING, p))
+                if (prefs.adhkarRemind && p == Prayer.ASR) list.add(Ev(iq + 20 * 60_000L, EvType.ADHKAR_EVENING, p))
+                if (prefs.afterPrayerRemind) list.add(Ev(iq + 10 * 60_000L, EvType.AFTER_PRAYER, p))
                 if (prefs.adhanOn(p)) {
                     if (prefs.preOn && prefs.preMin > 0) list.add(Ev(t - prefs.preMin * 60_000L, EvType.PRE, p))
                     if (prefs.iqamaOn && prefs.iqamaMin(p) > 0) list.add(Ev(t + prefs.iqamaMin(p) * 60_000L, EvType.IQAMA, p))

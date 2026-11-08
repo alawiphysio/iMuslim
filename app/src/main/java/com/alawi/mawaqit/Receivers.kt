@@ -37,6 +37,18 @@ class AlarmReceiver : BroadcastReceiver() {
                     Notifier.reminder(ctx, 202, title, "أقيموا الصلاة 🤍")
                     if (prefs.voiceOn) AdhanService.say(ctx, p, t, title, Voice.iqama(prefs.userName, p, t))
                 }
+                EvType.ADHKAR_MORNING, EvType.ADHKAR_EVENING, EvType.AFTER_PRAYER -> if (p != null) {
+                    val (cat, title, speech) = when (type) {
+                        EvType.ADHKAR_MORNING -> Triple(Adhkar.MORNING_EVENING, "☀️ أذكار الصباح",
+                            "يا ${prefs.userName}، لا تنسى أذكار الصباح، حصّن نفسك ليومك.")
+                        EvType.ADHKAR_EVENING -> Triple(Adhkar.MORNING_EVENING, "🌇 أذكار المساء",
+                            "يا ${prefs.userName}، حان وقت أذكار المساء.")
+                        else -> Triple(Adhkar.AFTER_PRAYER, "🤲 الأذكار بعد الصلاة",
+                            "يا ${prefs.userName}، لا تنسى الأذكار بعد صلاة ${p.displayName(t)}.")
+                    }
+                    Notifier.reminder(ctx, 210, title, "اضغط لقراءتها والاستماع لها", Intent(ctx, AdhkarReaderActivity::class.java).putExtra("cat", cat))
+                    if (prefs.voiceOn) AdhanService.say(ctx, p, t, title, speech)
+                }
                 EvType.REFRESH -> {}
             }
         } catch (e: Exception) {
@@ -90,11 +102,12 @@ object Notifier {
         nm.createNotificationChannel(remind)
     }
 
-    fun reminder(ctx: Context, id: Int, title: String, text: String) {
+    fun reminder(ctx: Context, id: Int, title: String, text: String, target: Intent? = null) {
         ensureChannels(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         val open = PendingIntent.getActivity(
-            ctx, 1, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            ctx, id, target ?: Intent(ctx, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val n = Notification.Builder(ctx, CH_REMIND)
             .setSmallIcon(R.drawable.ic_notif)
