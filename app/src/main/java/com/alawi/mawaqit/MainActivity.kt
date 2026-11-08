@@ -396,7 +396,7 @@ class MainActivity : Activity() {
         applyFoldPadding()
 
         // رأس الصفحة: العنوان + المدينة + التاريخ
-        root.addView(tv("مواقيت أحمد", 30f, GOLD, true).also {
+        root.addView(tv("الصلاة يا مسلم", 30f, GOLD, true).also {
             it.gravity = Gravity.CENTER
             it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
         })
@@ -714,7 +714,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bk.addView(bRow)
         bk.addView(divider())
-        bk.addView(tv("⌚ ساعة سامسونج: تنبيهات الأذان والإقامة والتذكيرات توصل لساعتك تلقائياً وتهتز فيها، بشرط إن تطبيق Galaxy Wearable مسموح له بإشعارات «مواقيت أحمد».", 13f, MUTED))
+        bk.addView(tv("⌚ ساعة سامسونج: تنبيهات الأذان والإقامة والتذكيرات توصل لساعتك تلقائياً وتهتز فيها، بشرط إن تطبيق Galaxy Wearable مسموح له بإشعارات «الصلاة يا مسلم».", 13f, MUTED))
         root.addView(bk)
 
         // الوضع القوي: صامت + عدم إزعاج
@@ -782,7 +782,7 @@ class MainActivity : Activity() {
         })
         root.addView(bat)
 
-        root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← مواقيت أحمد", 12f, MUTED).also {
+        root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← الصلاة يا مسلم", 12f, MUTED).also {
             it.gravity = Gravity.CENTER; it.setPadding(0, dp(16), 0, 0)
         })
         animateEntrance(root)
