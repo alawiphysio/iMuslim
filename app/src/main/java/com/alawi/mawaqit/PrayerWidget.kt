@@ -116,7 +116,8 @@ class PrayerWidget : AppWidgetProvider() {
                 rv.setTextViewText(R.id.w_iqama, "الإقامة ${Fmt.time(st.iqamaT)} • باقي ${Fmt.minutesLeft(st.iqamaT - now)}")
                 rv.setTextViewText(R.id.w_ring_caption, "للإقامة")
             } else {
-                rv.setTextViewText(R.id.w_label, "الصلاة القادمة")
+                val tag = Season.current(now).tag
+                rv.setTextViewText(R.id.w_label, if (tag.isEmpty()) "الصلاة القادمة" else "$tag • الصلاة القادمة")
                 rv.setTextViewText(R.id.w_next_name, name)
                 rv.setTextViewText(R.id.w_next_time, "الأذان ${Fmt.time(st.adhanT)}")
                 rv.setTextViewText(R.id.w_iqama, "الإقامة ${Fmt.time(st.iqamaT)}")

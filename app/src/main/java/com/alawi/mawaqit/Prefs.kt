@@ -179,6 +179,11 @@ class Prefs(ctx: Context) {
         e.apply()
     }
 
+    /** تعديل التاريخ الهجري بالأيام (لو أُعلنت الرؤية بخلاف التقويم) */
+    var hijriAdjust: Int
+        get() = sp.getInt("hijri_adjust", 0)
+        set(v) { sp.edit().putInt("hijri_adjust", v).apply(); Hijri.adjustDays = v }
+
     var muezzinId: String?
         get() = sp.getString("muezzin_id", null)
         set(v) = sp.edit().putString("muezzin_id", v).apply()

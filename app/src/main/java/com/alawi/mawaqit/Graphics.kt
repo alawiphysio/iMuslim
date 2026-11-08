@@ -423,6 +423,8 @@ class SkyView(ctx: Context) : View(ctx) {
     private val bgPaint = Paint()
     private var t = 0f
     private val startNs = System.nanoTime()
+    private var festive = false
+    private val festiveColors = intArrayOf(0xFFF6DE8D.toInt(), 0xFF7FE0C9.toInt(), 0xFFFF9EB5.toInt(), 0xFFB3A6FF.toInt())
     private var meteorStart = -10f
     private var meteorX = 0f
     private var meteorY = 0f
@@ -449,7 +451,9 @@ class SkyView(ctx: Context) : View(ctx) {
             stars.add(Star(rnd.nextFloat() * w, rnd.nextFloat() * h * 0.85f,
                 (0.6f + rnd.nextFloat() * 1.4f) * d, 0.6f + rnd.nextFloat() * 1.6f, rnd.nextFloat() * 6.28f))
         }
-        bgPaint.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), C_BG_TOP, C_BG_BOTTOM, Shader.TileMode.CLAMP)
+        val season = Season.current()
+        festive = season.festive
+        bgPaint.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), season.skyTop, season.skyBottom, Shader.TileMode.CLAMP)
     }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); anim.start() }
@@ -457,10 +461,17 @@ class SkyView(ctx: Context) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
-        for (s in stars) {
+        for ((i, s) in stars.withIndex()) {
             val a = 0.25f + 0.75f * ((sin(t * s.speed + s.phase) + 1f) / 2f)
-            paint.color = Color.argb((a * 220).toInt(), 255, 245, 215)
-            c.drawCircle(s.x, s.y, s.r, paint)
+            if (festive) {
+                // أيام العيد: نجوم ملونة كأنها زينة
+                val col = festiveColors[i % festiveColors.size]
+                paint.color = Color.argb((a * 230).toInt(), Color.red(col), Color.green(col), Color.blue(col))
+                c.drawCircle(s.x, s.y, s.r * 1.4f, paint)
+            } else {
+                paint.color = Color.argb((a * 220).toInt(), 255, 245, 215)
+                c.drawCircle(s.x, s.y, s.r, paint)
+            }
         }
         // شهاب
         val mt = t - meteorStart

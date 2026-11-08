@@ -66,7 +66,8 @@ class AlarmReceiver : BroadcastReceiver() {
                     EvType.MOSQUE_START -> Mosque.start(ctx)
                     EvType.MOSQUE_END -> Mosque.end(ctx)
                     EvType.FRIDAY_KAHF -> {
-                        Notifier.reminder(ctx, 240, "📖 جمعة مباركة", "لا تنسى قراءة سورة الكهف، والإكثار من الصلاة على النبي ﷺ")
+                        Notifier.reminder(ctx, 240, "📖 جمعة مباركة", "اضغط لقراءة سورة الكهف • وأكثر من الصلاة على النبي ﷺ",
+                            Intent(ctx, QuranReaderActivity::class.java).putExtra("s", 18).putExtra("a", 1))
                         speech.add("جمعة مباركة يا ${prefs.userName}. لا تنسى قراءة سورة الكهف، وأكثر من الصلاة على النبي صلى الله عليه وسلم.")
                         speechTitle = "جمعة مباركة"; speechPrayer = p
                     }
