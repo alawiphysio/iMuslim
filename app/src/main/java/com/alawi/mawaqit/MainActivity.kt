@@ -51,6 +51,9 @@ class MainActivity : Activity() {
     private lateinit var nextTimeTv: TextView
     private lateinit var countdownTv: TextView
     private lateinit var soundTv: TextView
+    private lateinit var minutesTv: TextView
+    private lateinit var moonTv: TextView
+    private lateinit var moonInfoTv: TextView
     private val rowName = HashMap<Prayer, TextView>()
     private val rowTime = HashMap<Prayer, TextView>()
     private val rowIqama = HashMap<Prayer, TextView>()
@@ -130,6 +133,9 @@ class MainActivity : Activity() {
         dateTv.text = "${Hijri.format(now)}  •  ${Fmt.date(now)}"
         nextNameTv.text = next.displayName(nextT)
         nextTimeTv.text = "الأذان الساعة ${Fmt.time(nextT)}"
+        val mp = Moon.phase(now)
+        moonTv.text = "${mp.emoji}  ${mp.name}"
+        moonInfoTv.text = "الإضاءة ${Fmt.num(mp.illumination)}٪  •  عمر القمر ${Fmt.num(mp.ageDays.toInt() + 1)} يوم"
         for (p in Prayer.values()) {
             val t = today[p.ordinal]
             rowName[p]?.text = p.displayName(t)
@@ -148,6 +154,7 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         if (lastNextT != 0L && now >= lastNextT) { refresh(); return }
         countdownTv.text = Fmt.countdown(lastNextT - now)
+        minutesTv.text = "باقي " + Fmt.minutesLeft(lastNextT - now)
     }
 
     private fun checkExactAlarm() {
@@ -276,10 +283,21 @@ class MainActivity : Activity() {
             it.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             it.layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
+        minutesTv = tv("", 18f, GOLD, true).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextNameTv)
         nextCard.addView(countdownTv)
+        nextCard.addView(minutesTv)
         nextCard.addView(nextTimeTv)
         root.addView(nextCard)
+
+        // بطاقة منازل القمر
+        val moonCard = card()
+        moonCard.addView(header("منازل القمر"))
+        moonTv = tv("", 22f, TEXT, true)
+        moonInfoTv = tv("", 13f, MUTED)
+        moonCard.addView(moonTv)
+        moonCard.addView(moonInfoTv)
+        root.addView(moonCard)
 
         // بطاقة أوقات اليوم
         val timesCard = card()
