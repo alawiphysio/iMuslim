@@ -51,6 +51,15 @@ object Times {
         return State(false, p, t, t + prefs.iqamaMin(p) * 60_000L, t, progress(ctx, now))
     }
 
+    /** الصلاة اللي فاتت ووقتها */
+    fun prevPair(ctx: Context, now: Long = System.currentTimeMillis()): Pair<Prayer, Long> {
+        for (d in 0 downTo -1) {
+            val arr = forDay(ctx, d, now)
+            for (p in Prayer.FIVE.reversed()) if (arr[p.ordinal] <= now) return Pair(p, arr[p.ordinal])
+        }
+        return Pair(Prayer.ISHA, now - 6 * 3_600_000L)
+    }
+
     /** وقت الصلاة اللي فاتت (لحساب امتلاء الحلقة) */
     fun prev(ctx: Context, now: Long = System.currentTimeMillis()): Long {
         for (d in 0 downTo -1) {

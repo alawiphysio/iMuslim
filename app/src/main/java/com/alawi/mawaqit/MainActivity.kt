@@ -71,6 +71,10 @@ class MainActivity : Activity() {
     private lateinit var travelCard: LinearLayout
     private lateinit var travelTv: TextView
     private lateinit var seasonCard: LinearLayout
+    private lateinit var timeline: TimelineView
+    private val chipBox = arrayOfNulls<LinearLayout>(3)
+    private val chipTitle = arrayOfNulls<TextView>(3)
+    private val chipTime = arrayOfNulls<TextView>(3)
     private lateinit var historyCard: LinearLayout
     private var shownSeason: Season? = null
     private lateinit var contentRoot: LinearLayout
@@ -179,17 +183,38 @@ class MainActivity : Activity() {
             figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
                 .setInterpolator(DecelerateInterpolator(2f)).start()
         }
-        betweenBtn.text = if (st.iqamaPhase) "📿 الدعاء بين الأذان والإقامة لا يُرد" else "📿 أذكار الأذان"
+        betweenBtn.text = if (st.iqamaPhase) "🤲 الدعاء بين الأذان والإقامة لا يُرد" else "📿 أذكار الأذان"
+        // شريط الوقت والخانات
+        val after = Times.next(this, st.adhanT + 60_000L)
+        if (st.iqamaPhase) {
+            timeline.startLabel = "الأذان"; timeline.startTime = Fmt.time(st.adhanT)
+            timeline.endLabel = "الإقامة"; timeline.endTime = Fmt.time(st.iqamaT)
+        } else {
+            val (pp, pt) = Times.prevPair(this, now)
+            timeline.startLabel = pp.displayName(pt); timeline.startTime = Fmt.time(pt)
+            timeline.endLabel = "أذان $stName"; timeline.endTime = Fmt.time(st.adhanT)
+        }
+        timeline.progress = st.progress
+        val chipData = listOf(
+            Triple("الأذان", Fmt.time(st.adhanT), !st.iqamaPhase),
+            Triple("الإقامة", Fmt.time(st.iqamaT), st.iqamaPhase),
+            Triple("الصلاة بعدها", "${after.first.displayName(after.second)} ${Fmt.time(after.second).replace(" ص", "").replace(" م", "")}", false)
+        )
+        chipData.forEachIndexed { i, (a, b, on) ->
+            chipTitle[i]?.text = a; chipTime[i]?.text = b
+            chipTime[i]?.setTextColor(if (on) GOLD else TEXT)
+            chipBox[i]?.background = rounded(if (on) 0x2ED9B44A else 0x0DFFFFFF, 14f, if (on) GOLD else 0x40D9B44A)
+        }
         if (st.iqamaPhase) {
             nextLabelTv.text = "حان وقت الصلاة • استعد للإقامة"
             nextNameTv.text = "صلاة $stName"
             nextTimeTv.text = "أذّن ${Fmt.time(st.adhanT)}  •  الإقامة ${Fmt.time(st.iqamaT)}"
-            ringCaptionTv.text = "للإقامة"
+            ringCaptionTv.text = "باقي على الإقامة"
         } else {
             nextLabelTv.text = "الصلاة القادمة"
             nextNameTv.text = stName
             nextTimeTv.text = "الأذان ${Fmt.time(st.adhanT)}  •  الإقامة ${Fmt.time(st.iqamaT)}"
-            ringCaptionTv.text = "للأذان"
+            ringCaptionTv.text = "باقي على الأذان"
         }
         val mp = Moon.phase(now)
         moonTv.text = "${mp.emoji}  ${mp.name}"
@@ -272,11 +297,15 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         if (lastNextT != 0L && now >= lastNextT) { refresh(); return }
         countdownTv.text = Fmt.countdown(lastNextT - now)
-        minutesTv.text = "باقي " + Fmt.minutesLeft(lastNextT - now) + " " + ringCaptionTv.text
+        minutesTv.text = Fmt.minutesLeft(lastNextT - now)
         val mins = ((lastNextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
         minutesBigTv.text = Fmt.num(mins)
         minutesUnitTv.text = when { mins == 1 -> "دقيقة"; mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" }
-        if (now / 1000 % 30 == 0L) ringView.setProgress(Times.state(this, now).progress, false)
+        if (now / 1000 % 30 == 0L) {
+            val p = Times.state(this, now).progress
+            ringView.setProgress(p, false)
+            timeline.progress = p
+        }
     }
 
     private fun checkExactAlarm() {
@@ -457,7 +486,7 @@ class MainActivity : Activity() {
         ringBox.addView(ringView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val inner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-        minutesBigTv = tv("", 54f, TEXT, true).also {
+        minutesBigTv = tv("", 62f, TEXT, true).also {
             it.gravity = Gravity.CENTER
             it.setShadowLayer(dp(12).toFloat(), 0f, 0f, 0x66F6DE8D)
         }
@@ -476,10 +505,24 @@ class MainActivity : Activity() {
             it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(6)
         })
 
-        minutesTv = tv("", 17f, GOLD, true).also { it.gravity = Gravity.CENTER }
-        nextTimeTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
+        minutesTv = tv("", 17f, GOLD, true).also { it.gravity = Gravity.CENTER; it.visibility = View.GONE }
+        nextTimeTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER; it.visibility = View.GONE }
         nextCard.addView(minutesTv)
         nextCard.addView(nextTimeTv)
+        // شريط الوقت
+        timeline = TimelineView(this)
+        nextCard.addView(timeline, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)).also { it.topMargin = dp(8) })
+        // ثلاث خانات: الأذان • الإقامة • الصلاة بعدها
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (i in 0..2) {
+            val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(9), dp(4), dp(9)) }
+            val t1 = tv("", 11f, MUTED).also { it.gravity = Gravity.CENTER }
+            val t2 = tv("", 16f, TEXT, true).also { it.gravity = Gravity.CENTER }
+            b.addView(t1); b.addView(t2)
+            chipBox[i] = b; chipTitle[i] = t1; chipTime[i] = t2
+            chips.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i < 2) it.marginEnd = dp(8) })
+        }
+        nextCard.addView(chips, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(6) })
         betweenBtn = button("📿 أذكار الأذان والدعاء قبل الإقامة") { Adhkar.open(this, Adhkar.ADHAN) }
         nextCard.addView(betweenBtn)
         root.addView(nextCard)

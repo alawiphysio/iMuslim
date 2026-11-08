@@ -544,6 +544,50 @@ class RingView(ctx: Context) : View(ctx) {
     }
 }
 
+/** شريط الوقت: من (الصلاة السابقة أو الأذان) إلى (الأذان أو الإقامة)، مع نقطة مضيئة تتحرك */
+class TimelineView(ctx: Context) : View(ctx) {
+    var progress = 0f
+        set(v) { field = v.coerceIn(0f, 1f); invalidate() }
+    var startLabel = ""; var startTime = ""
+    var endLabel = ""; var endTime = ""
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(c: Canvas) {
+        val d = resources.displayMetrics.density
+        val pad = 10 * d
+        val y = 12 * d
+        val w = width.toFloat()
+        val right = w - pad; val left = pad
+        // المسار
+        p.style = Paint.Style.STROKE; p.strokeCap = Paint.Cap.ROUND; p.strokeWidth = 6 * d
+        p.shader = null; p.color = 0x26F6DE8D
+        c.drawLine(left, y, right, y, p)
+        // الجزء المنقضي (من اليمين لليسار)
+        val x = right - (right - left) * progress
+        p.shader = LinearGradient(right, 0f, x, 0f, 0xFF9C7A22.toInt(), C_GOLD_LIGHT, Shader.TileMode.CLAMP)
+        if (progress > 0.005f) c.drawLine(right, y, x, y, p)
+        p.shader = null
+        // النقطة المضيئة
+        p.style = Paint.Style.FILL
+        p.shader = RadialGradient(x, y, 16 * d, intArrayOf(0xB3F6DE8D.toInt(), 0x00F6DE8D), null, Shader.TileMode.CLAMP)
+        c.drawCircle(x, y, 16 * d, p)
+        p.shader = null; p.color = Color.WHITE
+        c.drawCircle(x, y, 8 * d, p)
+        // التسميات
+        p.textSize = 11 * d; p.color = 0xFFA9BDB4.toInt()
+        p.textAlign = Paint.Align.RIGHT
+        c.drawText(startLabel, w, y + 26 * d, p)
+        p.textAlign = Paint.Align.LEFT
+        c.drawText(endLabel, 0f, y + 26 * d, p)
+        p.textSize = 13 * d; p.color = C_TEXT; p.isFakeBoldText = true
+        p.textAlign = Paint.Align.RIGHT
+        c.drawText(startTime, w, y + 42 * d, p)
+        p.textAlign = Paint.Align.LEFT
+        c.drawText(endTime, 0f, y + 42 * d, p)
+        p.isFakeBoldText = false
+    }
+}
+
 /** رسمة المسجد الذهبية */
 class MosqueView(ctx: Context) : View(ctx) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
