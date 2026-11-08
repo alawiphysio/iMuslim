@@ -27,7 +27,7 @@
                 android:layout_height="wrap_content"
                 android:text="الصلاة القادمة"
                 android:textColor="#FFA9BDB4"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/w_next_name"
@@ -44,46 +44,79 @@
                 android:layout_height="wrap_content"
                 android:text="--:--"
                 android:textColor="#FFF4EFE1"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/w_moon_img"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:scaleType="fitCenter" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/w_moon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#FFF4EFE1"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/w_hijri"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#FFA9BDB4"
+                        android:textSize="10sp" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="vertical">
+        <FrameLayout
+            android:layout_width="104dp"
+            android:layout_height="104dp">
 
-            <TextView
+            <ImageView
+                android:id="@+id/w_ring"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="باقي"
-                android:textColor="#FFA9BDB4"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/w_countdown"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_gravity="center"
                 android:gravity="center"
-                android:text="--"
-                android:textColor="#FFD9B44A"
-                android:textSize="30sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/w_moon"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFF4EFE1"
-                android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/w_countdown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--"
+                    android:textColor="#FFF4EFE1"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/w_hijri"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFA9BDB4"
-                android:textSize="11sp" />
-        </LinearLayout>
+                <TextView
+                    android:id="@+id/w_unit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="دقيقة"
+                    android:textColor="#FFD9B44A"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </FrameLayout>
     </LinearLayout>
 
     <LinearLayout

@@ -56,8 +56,17 @@ class PrayerWidget : AppWidgetProvider() {
             rv.setTextViewText(R.id.w_next_name, next.displayName(nextT))
             rv.setTextViewText(R.id.w_next_time, "الأذان ${Fmt.time(nextT)}")
             rv.setTextViewText(R.id.w_hijri, Hijri.format(now))
-            rv.setTextViewText(R.id.w_countdown, Fmt.minutesLeft(nextT - now))
-            rv.setTextViewText(R.id.w_moon, Moon.label(now))
+            // العدّاد بالدقائق داخل الحلقة الذهبية
+            val mins = ((nextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+            rv.setTextViewText(R.id.w_countdown, Fmt.num(mins))
+            rv.setTextViewText(R.id.w_unit, when { mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" })
+            val density = ctx.resources.displayMetrics.density
+            rv.setImageViewBitmap(R.id.w_ring, Art.widgetRing((104 * density).toInt().coerceAtMost(420), Times.progress(ctx, now)))
+
+            // القمر
+            val mp = Moon.phase(now)
+            rv.setImageViewBitmap(R.id.w_moon_img, Art.widgetMoon((30 * density * 1.6f).toInt(), Moon.frac(now)))
+            rv.setTextViewText(R.id.w_moon, "${mp.name} • ${Fmt.num(mp.illumination)}٪")
 
             Prayer.FIVE.forEachIndexed { i, p ->
                 val t = today[p.ordinal]
