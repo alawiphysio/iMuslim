@@ -90,6 +90,16 @@ object Quran {
     fun isSajda(s: Int, a: Int) = Pair(s, a) in sajdas
     fun juzStart(j: Int): Pair<Int, Int> = juz.getOrElse(j - 1) { Pair(1, 1) }
 
+    fun pageStart(ctx: Context, p: Int): Pair<Int, Int> { load(ctx); return pages.getOrElse(p - 1) { Pair(1, 1) } }
+
+    /** آخر آية في الصفحة */
+    fun pageEnd(ctx: Context, p: Int): Pair<Int, Int> {
+        load(ctx)
+        if (p >= pages.size) return Pair(114, 6)
+        val (s, a) = pages[p]
+        return if (a > 1) Pair(s, a - 1) else Pair(s - 1, surah(ctx, s - 1).verses.size)
+    }
+
     /** للبحث: نشيل التشكيل وعلامات الرسم العثماني */
     fun plain(s: String): String {
         val sb = StringBuilder(s.length)
@@ -228,6 +238,84 @@ class QuranActivity : Activity() {
         }
         root.addView(search, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(12) })
 
+        // الختمة
+        val kh = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = rounded(0xCC0F2E27.toInt(), 18f, 0x40D9B44A)
+        }
+        kh.addView(tv("🎯 ختمة القرآن", 18f, C_GOLD, true))
+        if (!Khatma.active(this)) {
+            kh.addView(tv("اختر كم يوم تبغى تختم فيه، والتطبيق يقسم لك الورد اليومي ويذكّرك فيه بعد العشاء.", 13f, 0xFFA9BDB4.toInt()))
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0) }
+            for (d in listOf(30, 20, 15, 10, 7)) row.addView(tv("${Fmt.num(d)} يوم", 14f, 0xFF0B231E.toInt(), true).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10))
+                background = rounded(C_GOLD, 14f)
+                setOnClickListener { Khatma.start(this@QuranActivity, d); Scheduler.scheduleNext(this@QuranActivity); recreate() }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(6) })
+            kh.addView(row)
+        } else if (Khatma.finished(this)) {
+            kh.addView(tv("🎉 ما شاء الله، أتممت الختمة! اللهم اجعل القرآن ربيع قلوبنا", 15f, C_TEXT, true).apply { setPadding(0, dp(8), 0, 0) })
+            kh.addView(tv("ابدأ ختمة جديدة", 14f, C_GOLD, true).apply {
+                setPadding(0, dp(10), 0, 0); setOnClickListener { Khatma.stop(this@QuranActivity); recreate() }
+            })
+        } else {
+            kh.addView(tv("ختمة في ${Fmt.num(Khatma.days(this))} يوم • أنجزت ${Fmt.num(Khatma.percent(this))}٪ • ${Fmt.num(Khatma.pagesPerDay(this))} صفحة يومياً", 13f, 0xFFA9BDB4.toInt()))
+            val bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = 100; progress = Khatma.percent(this@QuranActivity)
+                progressTintList = android.content.res.ColorStateList.valueOf(C_GOLD)
+            }
+            kh.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(10)).also { it.topMargin = dp(8) })
+            kh.addView(tv((if (Khatma.doneToday(this)) "✅ خلّصت ورد اليوم. الورد القادم: " else "📖 ورد اليوم: ") + Khatma.describe(this), 14f, C_TEXT).apply { setPadding(0, dp(8), 0, 0) })
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0) }
+            row.addView(tv("📖 اقرأ الورد", 14f, 0xFF0B231E.toInt(), true).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10)); background = rounded(C_GOLD, 14f)
+                setOnClickListener { val (s, a) = Quran.pageStart(this@QuranActivity, Khatma.nextRange(this@QuranActivity).first); Quran.open(this@QuranActivity, s, a) }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(6) })
+            row.addView(tv("✓ أنهيت الورد", 14f, C_GOLD, true).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10)); background = rounded(0x00000000, 14f, C_GOLD)
+                setOnClickListener { Khatma.markDone(this@QuranActivity); Toast.makeText(this@QuranActivity, "بارك الله فيك 🤍", Toast.LENGTH_SHORT).show(); recreate() }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            kh.addView(row)
+            kh.addView(tv("إلغاء الختمة", 11f, 0xFFA9BDB4.toInt()).apply {
+                setPadding(0, dp(8), 0, 0); setOnClickListener { Khatma.stop(this@QuranActivity); recreate() }
+            })
+        }
+        root.addView(kh, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(12) })
+
+        // التلاوة بدون إنترنت
+        val dl = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = rounded(0xCC0F2E27.toInt(), 18f, 0x26D9B44A)
+        }
+        dl.addView(tv("⬇ التلاوة بدون إنترنت", 17f, C_GOLD, true))
+        dl.addView(tv("محمّل ${Fmt.num(QuranDownloads.readyCount(this))} من ١١٤ سورة (${Fmt.num(QuranDownloads.sizeMb(this))} ميجا)", 13f, 0xFFA9BDB4.toInt()))
+        fun dlBtn(label: String, list: List<Int>, confirm: String? = null) = tv(label, 14f, C_TEXT, true).apply {
+            setPadding(0, dp(10), 0, dp(4))
+            setOnClickListener {
+                val go = {
+                    val n = QuranDownloads.download(this@QuranActivity, list)
+                    Toast.makeText(this@QuranActivity, if (n > 0) "بدأ تحميل ${Fmt.num(n)} سورة، تابعه من الإشعارات" else "محمّلة من قبل", Toast.LENGTH_SHORT).show()
+                }
+                if (confirm != null) AlertDialog.Builder(this@QuranActivity).setMessage(confirm)
+                    .setPositiveButton("حمّل") { _, _ -> go() }.setNegativeButton("لا", null).show() else go()
+            }
+        }
+        dl.addView(dlBtn("• تحميل جزء عمّ (٧٨–١١٤)", (78..114).toList()))
+        dl.addView(dlBtn("• تحميل الكهف ويس والملك والواقعة والرحمن", listOf(18, 36, 67, 56, 55)))
+        dl.addView(dlBtn("• تحميل المصحف كامل (حوالي ١٫٤ جيجا)", (1..114).toList(),
+            "المصحف كامل حجمه حوالي ١٫٤ جيجا. يفضّل تحمّله على الواي فاي. تبدأ؟"))
+        dl.addView(tv("🗑 حذف التحميلات", 12f, 0xFFA9BDB4.toInt()).apply {
+            setPadding(0, dp(10), 0, 0)
+            setOnClickListener {
+                AlertDialog.Builder(this@QuranActivity).setMessage("تحذف كل التلاوات المحمّلة؟")
+                    .setPositiveButton("احذف") { _, _ -> QuranDownloads.deleteAll(this@QuranActivity); recreate() }
+                    .setNegativeButton("لا", null).show()
+            }
+        })
+        root.addView(dl, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(10) })
+
         // تبويبات
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, dp(4)) }
         fun mkTab(label: String, i: Int) = tv(label, 15f, C_TEXT, true).apply {
@@ -284,7 +372,8 @@ class QuranActivity : Activity() {
         }
         when (tab) {
             0 -> for (s in Quran.load(this)) add(row("سورة ${s.name}",
-                "${if (s.meccan) "مكية" else "مدنية"} • ${Fmt.num(s.verses.size)} آية • الجزء ${Fmt.num(Quran.juzOf(s.n, 1))}",
+                "${if (s.meccan) "مكية" else "مدنية"} • ${Fmt.num(s.verses.size)} آية • الجزء ${Fmt.num(Quran.juzOf(s.n, 1))}" +
+                    if (QuranDownloads.isReady(this, s.n)) " • 🎧 محمّلة" else "",
                 Fmt.num(s.n)) { Quran.open(this, s.n) })
             1 -> for (j in 1..30) {
                 val (s, a) = Quran.juzStart(j)
@@ -452,8 +541,14 @@ class QuranReaderActivity : Activity() {
         val marked = QuranPrefs.bookmarks(this).contains(Pair(surah.n, a))
         AlertDialog.Builder(this)
             .setTitle("سورة ${surah.name} • آية ${Fmt.num(a)}")
-            .setItems(arrayOf(if (marked) "🔖 إزالة العلامة" else "🔖 حفظ علامة", "📋 نسخ الآية", "📤 مشاركة الآية", "🎧 استمع من هذه الآية")) { _, w ->
+            .setItems(arrayOf(if (marked) "🔖 إزالة العلامة" else "🔖 حفظ علامة", "📋 نسخ الآية", "📤 مشاركة الآية", "🎧 استمع من هذه الآية",
+                "📘 التفسير الميسر", if (QuranDownloads.isReady(this, surah.n)) "✅ السورة محمّلة" else "⬇ تحميل السورة للاستماع بدون إنترنت")) { _, w ->
                 when (w) {
+                    4 -> showTafsir(a)
+                    5 -> if (!QuranDownloads.isReady(this, surah.n)) {
+                        QuranDownloads.download(this, listOf(surah.n))
+                        Toast.makeText(this, "بدأ التحميل، تابعه من الإشعارات", Toast.LENGTH_SHORT).show()
+                    }
                     3 -> { follow = true; QuranPlayer.play(this, surah.n, a) }
                     0 -> { val added = QuranPrefs.toggleBookmark(this, surah.n, a)
                         Toast.makeText(this, if (added) "تم حفظ العلامة" else "تمت إزالة العلامة", Toast.LENGTH_SHORT).show() }
@@ -462,6 +557,24 @@ class QuranReaderActivity : Activity() {
                     2 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, ref), "مشاركة"))
                 }
             }.show()
+    }
+
+    /** التفسير الميسر للآية */
+    fun showTafsir(a: Int) {
+        val t = Tafsir.of(this, surah.n, a).replace("[التفسير]", "\n📘 التفسير:")
+        val box = android.widget.ScrollView(this)
+        box.addView(TextView(this).apply {
+            text = "﴿${Quran.verseText(surah, a - 1)}﴾\n\n$t\n\n— التفسير الميسر، مجمع الملك فهد لطباعة المصحف الشريف"
+            textSize = 17f; setTextColor(0xFF1E1A12.toInt()); setLineSpacing(0f, 1.4f)
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+            textDirection = View.TEXT_DIRECTION_RTL
+        })
+        AlertDialog.Builder(this)
+            .setTitle("سورة ${surah.name} • آية ${Fmt.num(a)}")
+            .setView(box)
+            .setPositiveButton("تم", null)
+            .setNeutralButton("الآية التالية") { _, _ -> if (a < surah.verses.size) showTafsir(a + 1) }
+            .show()
     }
 
     override fun onResume() {

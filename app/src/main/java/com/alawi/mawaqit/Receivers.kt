@@ -98,7 +98,14 @@ class AlarmReceiver : BroadcastReceiver() {
                         Notifier.reminder(ctx, 253, "🌌 الثلث الأخير من الليل",
                             "ينزل ربنا إلى السماء الدنيا، فيقول: من يدعوني فأستجيب له. قم صلِّ ركعتين")
                     }
-                    EvType.REFRESH -> Travel.check(ctx)
+                    EvType.KHATMA -> if (!Khatma.doneToday(ctx)) {
+                        val (s, a) = Quran.pageStart(ctx, Khatma.nextRange(ctx).first)
+                        Notifier.reminder(ctx, 260, "📖 ورد الختمة", Khatma.describe(ctx),
+                            Intent(ctx, QuranReaderActivity::class.java).putExtra("s", s).putExtra("a", a))
+                        speech.add("يا ${prefs.userName}، لا تنسى وردك من القرآن اليوم.")
+                        speechTitle = "ورد الختمة"; speechPrayer = p
+                    }
+                    EvType.REFRESH -> { Travel.check(ctx); AyahWidget.updateAll(ctx) }
                 }
             } catch (e: Exception) {
                 // في حال منع النظام تشغيل الخدمة نرسل إشعار بالصوت على الأقل

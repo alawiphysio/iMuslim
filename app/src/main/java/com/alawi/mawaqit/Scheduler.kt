@@ -81,7 +81,7 @@ object Times {
 
 enum class EvType {
     PRE, ADHAN, IQAMA, REFRESH, ADHKAR_MORNING, ADHKAR_EVENING, AFTER_PRAYER,
-    MOSQUE_START, MOSQUE_END, FRIDAY_KAHF, FRIDAY_HOUR, FAST_EVE, SUHOOR, IFTAR, QIYAM
+    MOSQUE_START, MOSQUE_END, FRIDAY_KAHF, FRIDAY_HOUR, FAST_EVE, SUHOOR, IFTAR, QIYAM, KHATMA
 }
 
 data class Ev(val time: Long, val type: EvType, val prayer: Prayer?)
@@ -136,6 +136,8 @@ object Scheduler {
                 list.add(Ev(arr[Prayer.MAGHRIB.ordinal] - MIN, EvType.IFTAR, Prayer.MAGHRIB))
             }
             if (prefs.qiyamOn) list.add(Ev(Night.lastThird(ctx, d, now), EvType.QIYAM, Prayer.FAJR))
+            if (Khatma.active(ctx) && !Khatma.finished(ctx))
+                list.add(Ev(arr[Prayer.ISHA.ordinal] + (prefs.iqamaMin(Prayer.ISHA) + 30) * MIN, EvType.KHATMA, Prayer.ISHA))
         }
         // تحديث بعد منتصف الليل لتغيير التاريخ
         val mid = Calendar.getInstance()

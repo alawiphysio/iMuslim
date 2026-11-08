@@ -160,6 +160,7 @@ class MainActivity : Activity() {
         Scheduler.scheduleNext(this)
         PrayerWidget.updateAll(this)
         LiveNotif.update(this)
+        AyahWidget.updateAll(this)
     }
 
     private fun refresh() {
@@ -529,6 +530,29 @@ class MainActivity : Activity() {
         }
         root.addView(quick, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(14) })
         root.addView(quick2, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(8) })
+
+        // آية اليوم
+        val (aS, aA) = AyahOfDay.pick(this)
+        val aSu = Quran.surah(this, aS)
+        val ayahCard = card()
+        ayahCard.addView(header("📖 آية اليوم"))
+        ayahCard.addView(tv("﴿${Quran.verseText(aSu, aA - 1)}﴾", 22f, TEXT).also {
+            it.typeface = resources.getFont(R.font.amiri_quran)
+            it.gravity = Gravity.CENTER
+            it.setLineSpacing(0f, 1.4f)
+        })
+        ayahCard.addView(tv("سورة ${aSu.name} • آية ${Fmt.num(aA)}", 12f, MUTED).also { it.gravity = Gravity.CENTER })
+        val aRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        aRow.addView(button("📘 التفسير") {
+            val t = Tafsir.of(this, aS, aA).replace("[التفسير]", "\n📘 التفسير:")
+            android.app.AlertDialog.Builder(this).setTitle("سورة ${aSu.name} • آية ${Fmt.num(aA)}")
+                .setMessage("$t\n\n— التفسير الميسر، مجمع الملك فهد لطباعة المصحف الشريف")
+                .setPositiveButton("تم", null).show()
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        aRow.addView(button("📖 في المصحف", outline = true) { Quran.open(this, aS, aA) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        ayahCard.addView(aRow)
+        root.addView(ayahCard)
 
         // في مثل هذا اليوم
         historyCard = card().apply { visibility = View.GONE }
