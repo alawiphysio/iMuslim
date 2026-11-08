@@ -22,10 +22,14 @@ import android.provider.Settings
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.view.Gravity
+import android.view.animation.DecelerateInterpolator
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -54,6 +58,16 @@ class MainActivity : Activity() {
     private lateinit var minutesTv: TextView
     private lateinit var moonTv: TextView
     private lateinit var moonInfoTv: TextView
+    private lateinit var minutesBigTv: TextView
+    private lateinit var minutesUnitTv: TextView
+    private lateinit var landmarkTv: TextView
+    private lateinit var landmarkView: LandmarkView
+    private lateinit var ringView: RingView
+    private lateinit var moonView: MoonView
+    private val rowIcon = HashMap<Prayer, PrayerIconView>()
+    private var pulseAnim: ObjectAnimator? = null
+    private var pulsedPrayer: Prayer? = null
+    private var ringIntroDone = false
     private val rowName = HashMap<Prayer, TextView>()
     private val rowTime = HashMap<Prayer, TextView>()
     private val rowIqama = HashMap<Prayer, TextView>()
@@ -135,6 +149,13 @@ class MainActivity : Activity() {
         nextTimeTv.text = "الأذان الساعة ${Fmt.time(nextT)}"
         val mp = Moon.phase(now)
         moonTv.text = "${mp.emoji}  ${mp.name}"
+        moonView.frac = Moon.frac(now)
+        val lm = Landmarks.detect(prefs.lat, prefs.lng)
+        landmarkView.type = lm
+        landmarkTv.text = lm.title
+        landmarkTv.visibility = if (lm.title.isEmpty()) View.GONE else View.VISIBLE
+        ringView.setProgress(Times.progress(this, now), !ringIntroDone)
+        ringIntroDone = true
         moonInfoTv.text = "الإضاءة ${Fmt.num(mp.illumination)}٪  •  عمر القمر ${Fmt.num(mp.ageDays.toInt() + 1)} يوم"
         for (p in Prayer.values()) {
             val t = today[p.ordinal]
@@ -143,8 +164,11 @@ class MainActivity : Activity() {
             rowIqama[p]?.text = if (p.hasAdhan && prefs.iqamaOn)
                 "الإقامة ${Fmt.time(t + prefs.iqamaMin(p) * 60_000L)}" else ""
             val isNext = p == next && t == nextT
-            rowBox[p]?.background = rounded(if (isNext) 0x33D9B44A else Color.TRANSPARENT, 14f)
+            rowBox[p]?.background = if (isNext) rounded(0x33D9B44A, 14f, 0x66D9B44A) else rounded(Color.TRANSPARENT, 14f)
             rowName[p]?.setTextColor(if (isNext) GOLD else TEXT)
+            rowTime[p]?.setTextColor(if (isNext) GOLD else TEXT)
+            rowIcon[p]?.active = isNext
+            if (isNext && pulsedPrayer != p) { pulsedPrayer = p; pulse(rowIcon[p]) }
         }
         soundTv.text = "الصوت الحالي: " + (prefs.adhanName ?: "صوت المنبه الافتراضي (اختر ملف أذان)")
         tick()
@@ -155,6 +179,10 @@ class MainActivity : Activity() {
         if (lastNextT != 0L && now >= lastNextT) { refresh(); return }
         countdownTv.text = Fmt.countdown(lastNextT - now)
         minutesTv.text = "باقي " + Fmt.minutesLeft(lastNextT - now)
+        val mins = ((lastNextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+        minutesBigTv.text = Fmt.num(mins)
+        minutesUnitTv.text = when { mins == 1 -> "دقيقة"; mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" }
+        if (now / 1000 % 30 == 0L) ringView.setProgress(Times.progress(this, now), false)
     }
 
     private fun checkExactAlarm() {
@@ -256,8 +284,13 @@ class MainActivity : Activity() {
     // ---------------- الواجهة ----------------
 
     private fun buildUi(): View {
+        val frame = FrameLayout(this)
+        frame.addView(SkyView(this), FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val scroll = ScrollView(this)
-        scroll.setBackgroundColor(BG)
+        scroll.isVerticalScrollBarEnabled = false
+        frame.addView(scroll, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -265,41 +298,73 @@ class MainActivity : Activity() {
         }
         scroll.addView(root)
 
-        // رأس الصفحة
-        root.addView(tv("مواقيت أحمد", 28f, GOLD, true))
-        cityTv = tv("", 15f, TEXT)
-        dateTv = tv("", 13f, MUTED)
+        // رأس الصفحة: العنوان + المدينة + التاريخ
+        root.addView(tv("مواقيت أحمد", 30f, GOLD, true).also {
+            it.gravity = Gravity.CENTER
+            it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
+        })
+        cityTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
+        dateTv = tv("", 13f, MUTED).also { it.gravity = Gravity.CENTER }
         root.addView(cityTv)
         root.addView(dateTv)
 
-        // بطاقة الصلاة القادمة
+        // رسمة أشهر مسجد في مدينتك
+        landmarkView = LandmarkView(this)
+        root.addView(landmarkView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
+        landmarkTv = tv("", 14f, GOLD, true).also { it.gravity = Gravity.CENTER }
+        root.addView(landmarkTv)
+
+        // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
         nextCard.gravity = Gravity.CENTER_HORIZONTAL
         nextCard.addView(tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER })
-        nextNameTv = tv("", 34f, GOLD, true).also { it.gravity = Gravity.CENTER }
-        nextTimeTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
-        countdownTv = tv("00:00:00", 46f, TEXT, true).also {
+        nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }
+        nextCard.addView(nextNameTv)
+
+        val ringBox = FrameLayout(this)
+        ringView = RingView(this)
+        ringBox.addView(ringView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val inner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        minutesBigTv = tv("", 54f, TEXT, true).also {
+            it.gravity = Gravity.CENTER
+            it.setShadowLayer(dp(12).toFloat(), 0f, 0f, 0x66F6DE8D)
+        }
+        minutesUnitTv = tv("دقيقة", 15f, GOLD).also { it.gravity = Gravity.CENTER }
+        countdownTv = tv("00:00:00", 17f, MUTED, true).also {
             it.gravity = Gravity.CENTER
             it.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             it.layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
-        minutesTv = tv("", 18f, GOLD, true).also { it.gravity = Gravity.CENTER }
-        nextCard.addView(nextNameTv)
-        nextCard.addView(countdownTv)
+        inner.addView(minutesBigTv); inner.addView(minutesUnitTv); inner.addView(countdownTv)
+        ringBox.addView(inner, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        nextCard.addView(ringBox, LinearLayout.LayoutParams(dp(250), dp(250)).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(6)
+        })
+
+        minutesTv = tv("", 17f, GOLD, true).also { it.gravity = Gravity.CENTER }
+        nextTimeTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
         nextCard.addView(minutesTv)
         nextCard.addView(nextTimeTv)
         root.addView(nextCard)
 
-        // بطاقة منازل القمر
+        // بطاقة منازل القمر: رسمة القمر الحقيقية + المعلومات
         val moonCard = card()
         moonCard.addView(header("منازل القمر"))
+        val moonRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        moonView = MoonView(this)
+        moonRow.addView(moonView, LinearLayout.LayoutParams(dp(120), dp(120)))
+        val moonText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, dp(12), 0) }
         moonTv = tv("", 22f, TEXT, true)
         moonInfoTv = tv("", 13f, MUTED)
-        moonCard.addView(moonTv)
-        moonCard.addView(moonInfoTv)
+        moonText.addView(moonTv); moonText.addView(moonInfoTv)
+        moonRow.addView(moonText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        moonCard.addView(moonRow)
         root.addView(moonCard)
 
-        // بطاقة أوقات اليوم
+        // بطاقة أوقات اليوم مع أيقونة لكل صلاة
         val timesCard = card()
         timesCard.addView(header("أوقات اليوم"))
         for (p in Prayer.values()) {
@@ -308,6 +373,8 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(10), dp(12), dp(10))
             }
+            val icon = PrayerIconView(this, p)
+            row.addView(icon, LinearLayout.LayoutParams(dp(30), dp(30)).also { it.marginEnd = dp(12) })
             val name = tv(p.ar, 18f, TEXT, true)
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.END }
             val time = tv("", 18f, TEXT, true).also { it.gravity = Gravity.END }
@@ -315,7 +382,7 @@ class MainActivity : Activity() {
             col.addView(time); col.addView(iq)
             row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(col)
-            rowName[p] = name; rowTime[p] = time; rowIqama[p] = iq; rowBox[p] = row
+            rowName[p] = name; rowTime[p] = time; rowIqama[p] = iq; rowBox[p] = row; rowIcon[p] = icon
             timesCard.addView(row)
         }
         root.addView(timesCard)
@@ -401,7 +468,35 @@ class MainActivity : Activity() {
         root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← مواقيت أحمد", 12f, MUTED).also {
             it.gravity = Gravity.CENTER; it.setPadding(0, dp(16), 0, 0)
         })
-        return scroll
+        animateEntrance(root)
+        return frame
+    }
+
+    /** دخول البطاقات بحركة متتابعة (تظهر وتطلع من تحت) */
+    private fun animateEntrance(root: LinearLayout) {
+        for (i in 0 until root.childCount) {
+            val v = root.getChildAt(i)
+            v.alpha = 0f
+            v.translationY = dp(40).toFloat()
+            v.animate().alpha(1f).translationY(0f)
+                .setStartDelay(80L * i)
+                .setDuration(650)
+                .setInterpolator(DecelerateInterpolator(2f))
+                .start()
+        }
+    }
+
+    /** نبض خفيف لصف الصلاة القادمة */
+    private fun pulse(v: View?) {
+        pulseAnim?.cancel()
+        v?.alpha = 1f
+        if (v == null) return
+        pulseAnim = ObjectAnimator.ofFloat(v, "alpha", 1f, 0.55f).apply {
+            duration = 1300
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -424,7 +519,7 @@ class MainActivity : Activity() {
 
     private fun card() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(CARD, 20f)
+        background = rounded(0xCC0F2E27.toInt(), 22f, 0x33D9B44A)
         setPadding(dp(16), dp(16), dp(16), dp(16))
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT

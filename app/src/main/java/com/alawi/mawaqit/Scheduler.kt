@@ -24,6 +24,23 @@ object Times {
         return arr
     }
 
+    /** وقت الصلاة اللي فاتت (لحساب امتلاء الحلقة) */
+    fun prev(ctx: Context, now: Long = System.currentTimeMillis()): Long {
+        for (d in 0 downTo -1) {
+            val arr = forDay(ctx, d, now)
+            for (p in Prayer.FIVE.reversed()) if (arr[p.ordinal] <= now) return arr[p.ordinal]
+        }
+        return now - 6 * 3_600_000L
+    }
+
+    /** نسبة الوقت المنقضي بين الصلاة السابقة والقادمة */
+    fun progress(ctx: Context, now: Long = System.currentTimeMillis()): Float {
+        val pv = prev(ctx, now)
+        val nx = next(ctx, now).second
+        if (nx <= pv) return 0f
+        return ((now - pv).toFloat() / (nx - pv).toFloat()).coerceIn(0f, 1f)
+    }
+
     /** الصلاة القادمة ووقتها */
     fun next(ctx: Context, now: Long = System.currentTimeMillis()): Pair<Prayer, Long> {
         for (d in 0..1) {

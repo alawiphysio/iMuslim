@@ -31,6 +31,9 @@ object Moon {
         return Phase(emoji, name, illum, age)
     }
 
+    /** عمر القمر كنسبة من الشهر (0 محاق، 0.5 بدر) للرسم */
+    fun frac(millis: Long): Double = phase(millis).ageDays / SYNODIC
+
     fun label(millis: Long): String {
         val p = phase(millis)
         return "${p.emoji} ${p.name} • ${Fmt.num(p.illumination)}٪"
