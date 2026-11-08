@@ -84,7 +84,7 @@ class PrayerWidget : AppWidgetProvider() {
                 Landmarks.detect(prefs.lat, prefs.lng), 24f * scale))
 
             // الشخصية
-            rv.setImageViewResource(R.id.w_figure, if (st.iqamaPhase) R.drawable.fig_praying else R.drawable.fig_walker)
+            rv.setImageViewResource(R.id.w_figure, Pictures.figure(ctx, st.iqamaPhase))
 
             val name = st.prayer.displayName(st.adhanT)
             val mins = ((st.target - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)

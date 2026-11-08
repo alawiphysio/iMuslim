@@ -58,8 +58,13 @@ class AdhanActivity : Activity() {
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
 
-        val fig = ImageView(this).apply { setImageResource(R.drawable.fig_walker) }
-        col.addView(fig, LinearLayout.LayoutParams(dp(170), dp(170)))
+        val fig = ImageView(this).apply {
+            setImageResource(Pictures.walker(this@AdhanActivity))
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            background = GradientDrawable().apply { setColor(0x22000000); cornerRadius = dp(28).toFloat() }
+        }
+        col.addView(fig, LinearLayout.LayoutParams(dp(220), dp(220)).also { it.bottomMargin = dp(12) })
         col.addView(tv("حان الآن موعد أذان", 22f, C_TEXT))
         val name = tv(p.displayName(t), 56f, C_GOLD, true).apply {
             setShadowLayer(dp(18).toFloat(), 0f, 0f, 0xAAD9B44A.toInt())
@@ -68,8 +73,20 @@ class AdhanActivity : Activity() {
         col.addView(tv("${Fmt.time(t)} • ${prefs.city}", 17f, C_TEXT))
         col.addView(tv("الإقامة ${Fmt.time(t + prefs.iqamaMin(p) * 60_000L)}", 16f, C_GOLD_LIGHT))
 
-        val lm = LandmarkView(this).apply { type = Landmarks.detect(prefs.lat, prefs.lng) }
-        col.addView(lm, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(170)).also { it.topMargin = dp(18) })
+        val lmType = Landmarks.detect(prefs.lat, prefs.lng)
+        val lmImg = Pictures.landmark(this, lmType)
+        if (lmImg == 0) {
+            val lm = LandmarkView(this).apply { type = lmType }
+            col.addView(lm, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)).also { it.topMargin = dp(18) })
+        } else {
+            val lm = ImageView(this).apply {
+                setImageResource(lmImg)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                clipToOutline = true
+                background = GradientDrawable().apply { setColor(0x22000000); cornerRadius = dp(22).toFloat() }
+            }
+            col.addView(lm, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)).also { it.topMargin = dp(18) })
+        }
 
         val stop = Button(this).apply {
             text = "إيقاف الأذان"
