@@ -217,7 +217,10 @@ class AdhkarReaderActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val id = intent.getIntExtra("cat", Adhkar.MORNING_EVENING)
-        cat = Adhkar.byId(this, id) ?: Adhkar.all(this).first()
+        val many = intent.getIntArrayExtra("cats")
+        cat = if (many != null && many.isNotEmpty())
+            DhikrCategory(id, intent.getStringExtra("title") ?: "أذكار", many.mapNotNull { Adhkar.byId(this, it) }.flatMap { it.items })
+        else Adhkar.byId(this, id) ?: Adhkar.all(this).first()
         val (frame, root) = Ui.screen(this)
         scroll = frame.findViewWithTag("scroll")
         val d = { v: Int -> Ui.dp(this, v) }

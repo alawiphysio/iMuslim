@@ -33,10 +33,8 @@ object Night {
 // =================== الصيام ===================
 object Fasting {
     private fun hijri(millis: Long): Pair<Int, Int> {
-        val c = IslamicCalendar()
-        c.setCalculationType(IslamicCalendar.CalculationType.ISLAMIC_UMALQURA)
-        c.timeInMillis = millis
-        return Pair(c.get(android.icu.util.Calendar.MONTH), c.get(android.icu.util.Calendar.DAY_OF_MONTH))
+        val d = Hijri.date(millis)
+        return Pair(d.month, d.day)
     }
 
     /** أيام يحرم صيامها: العيدين وأيام التشريق */

@@ -70,6 +70,9 @@ class MainActivity : Activity() {
     private lateinit var ramadanTv: TextView
     private lateinit var travelCard: LinearLayout
     private lateinit var travelTv: TextView
+    private lateinit var seasonCard: LinearLayout
+    private lateinit var historyCard: LinearLayout
+    private var shownSeason: Season? = null
     private lateinit var contentRoot: LinearLayout
     private val muezzinCards = HashMap<String, LinearLayout>()
     private var lastIqamaPhase: Boolean? = null
@@ -219,6 +222,17 @@ class MainActivity : Activity() {
             rowIcon[p]?.active = isNext
             if (isNext && pulsedPrayer != p) { pulsedPrayer = p; pulse(rowIcon[p]) }
         }
+        // المواسم: الجمعة، رمضان، العيدين، عشر ذي الحجة
+        val season = Season.current(now)
+        if (season != shownSeason) { shownSeason = season; buildSeasonCard(season, now) }
+        // في مثل هذا اليوم
+        val hist = IslamicHistory.on(Hijri.date(now))
+        historyCard.removeAllViews()
+        if (hist.isNotEmpty()) {
+            historyCard.visibility = View.VISIBLE
+            historyCard.addView(header("⭐ في مثل هذا اليوم"))
+            hist.forEach { historyCard.addView(tv("• $it", 14f, TEXT).also { t -> t.setLineSpacing(0f, 1.25f); t.setPadding(0, dp(4), 0, 0) }) }
+        } else historyCard.visibility = View.GONE
         // متابعة الصلوات
         val todayKey = Tracker.dayKey(now)
         for (p in Prayer.FIVE) {
@@ -419,7 +433,9 @@ class MainActivity : Activity() {
         }
         root.addView(landmarkImg, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
         landmarkTv = tv("", 14f, GOLD, true).also { it.gravity = Gravity.CENTER }
+        seasonCard = card().apply { visibility = View.GONE }
         root.addView(landmarkTv)
+        root.addView(seasonCard)
 
         // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
@@ -495,15 +511,28 @@ class MainActivity : Activity() {
             setOnClickListener { onClick() }
         }
         val tiles = listOf(
+            tile("📖", "المصحف") { startActivity(Intent(this, QuranActivity::class.java)) },
             tile("🕋", "القبلة") { startActivity(Intent(this, QiblaActivity::class.java)) },
-            tile("📿", "المسبحة") { startActivity(Intent(this, TasbihActivity::class.java)) },
             tile("🏰", "الأذكار") { startActivity(Intent(this, AdhkarActivity::class.java)) },
-            tile("☀️", "أذكار اليوم") { Adhkar.open(this, Adhkar.MORNING_EVENING) }
+            tile("📅", "التقويم") { startActivity(Intent(this, HijriCalendarActivity::class.java)) },
+            tile("📿", "المسبحة") { startActivity(Intent(this, TasbihActivity::class.java)) },
+            tile("🎧", "استمع") {
+                val s = QuranPrefs.listenSurah(this).takeIf { it > 0 } ?: 18
+                QuranPlayer.play(this, s, 1, if (QuranPrefs.listenSurah(this) == s) QuranPrefs.listenMs(this) else -1)
+                startActivity(Intent(this, QuranReaderActivity::class.java).putExtra("s", s).putExtra("follow", true))
+            }
         )
+        val quick2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tiles.forEachIndexed { i, t ->
-            quick.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i < tiles.size - 1) it.marginEnd = dp(8) })
+            val target = if (i < 3) quick else quick2
+            target.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i % 3 != 2) it.marginEnd = dp(8) })
         }
         root.addView(quick, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(14) })
+        root.addView(quick2, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(8) })
+
+        // في مثل هذا اليوم
+        historyCard = card().apply { visibility = View.GONE }
+        root.addView(historyCard)
 
         // حصن المسلم
         val hisn = card()
@@ -670,6 +699,9 @@ class MainActivity : Activity() {
         loc.addView(header("الموقع وطريقة الحساب"))
         loc.addView(tv("طريقة الحساب: تقويم أم القرى (الفجر 18.5°، العشاء بعد المغرب بساعة ونص، وساعتين في رمضان)", 13f, MUTED))
         loc.addView(tv("الموقع يتحدث تلقائياً: لو سافرت لمدينة ثانية تتغير الأوقات على حسب المنطقة.", 13f, MUTED))
+        loc.addView(numberField("تعديل التاريخ الهجري (± يوم) لو اختلفت الرؤية", prefs.hijriAdjust, true) {
+            prefs.hijriAdjust = it.coerceIn(-2, 2); shownSeason = null; refresh(); reschedule()
+        })
         loc.addView(button("📍 تحديث موقعي") { fetchLocation() })
         loc.addView(button("🕋 استخدام مكة المكرمة", outline = true) {
             prefs.lat = 21.4225; prefs.lng = 39.8262; prefs.city = "مكة المكرمة"
@@ -827,6 +859,60 @@ class MainActivity : Activity() {
         row.addView(tv(label, 15f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(e, LinearLayout.LayoutParams(dp(140), ViewGroup.LayoutParams.WRAP_CONTENT))
         return row
+    }
+
+    /** بطاقة الموسم: شكل ومحتوى مختلف يوم الجمعة ورمضان والعيدين وعشر ذي الحجة */
+    private fun buildSeasonCard(season: Season, now: Long) {
+        seasonCard.removeAllViews()
+        if (season == Season.NORMAL) { seasonCard.visibility = View.GONE; return }
+        seasonCard.visibility = View.VISIBLE
+        val h = Hijri.date(now)
+        seasonCard.background = rounded(if (season.festive) 0xCC0F3A3A.toInt() else 0xCC2A2410.toInt(), 22f, GOLD)
+        seasonCard.addView(tv(season.title, 26f, GOLD, true).also {
+            it.gravity = Gravity.CENTER
+            it.typeface = resources.getFont(R.font.amiri_quran)
+            it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
+        })
+        seasonCard.addView(tv(SeasonContent.greeting(season, h), 15f, TEXT).also { it.gravity = Gravity.CENTER })
+        if (season.festive || season == Season.DHUL_HIJJAH || season == Season.ARAFAH) {
+            seasonCard.addView(tv(SeasonContent.TAKBIR, 17f, 0xFFF6DE8D.toInt(), true).also {
+                it.gravity = Gravity.CENTER; it.setPadding(dp(8), dp(10), dp(8), dp(6))
+                it.typeface = resources.getFont(R.font.amiri_quran)
+            })
+        }
+        for (t in SeasonContent.tips(season, h)) seasonCard.addView(tv(t, 14f, TEXT).also { it.setPadding(0, dp(6), 0, 0); it.setLineSpacing(0f, 1.2f) })
+        when (season) {
+            Season.FRIDAY -> {
+                val maghrib = Times.forDay(this, 0, now)[Prayer.MAGHRIB.ordinal]
+                seasonCard.addView(tv("🤲 ساعة الاستجابة تقريباً من ${Fmt.time(maghrib - 60 * 60_000L)} إلى المغرب ${Fmt.time(maghrib)}", 13f, 0xFFF6DE8D.toInt()).also { it.setPadding(0, dp(8), 0, 0) })
+                seasonCard.addView(button("📖 اقرأ سورة الكهف") { Quran.open(this, 18) })
+                seasonCard.addView(button("🎧 استمع لسورة الكهف", outline = true) {
+                    QuranPlayer.play(this, 18)
+                    startActivity(Intent(this, QuranReaderActivity::class.java).putExtra("s", 18).putExtra("follow", true))
+                })
+            }
+            Season.RAMADAN -> seasonCard.addView(button("📖 وردك اليومي من القرآن") {
+                startActivity(Intent(this, QuranActivity::class.java))
+            })
+            Season.DHUL_HIJJAH, Season.ARAFAH, Season.EID_ADHA -> {
+                seasonCard.addView(button("🕋 دليل المناسك") { showManasik() })
+                seasonCard.addView(button("🤲 أدعية الحج والعمرة", outline = true) {
+                    startActivity(Intent(this, AdhkarReaderActivity::class.java).putExtra("cat", 115)
+                        .putExtra("title", "أدعية الحج والعمرة").putExtra("cats", (115..121).toList().toIntArray()))
+                })
+            }
+            else -> {}
+        }
+    }
+
+    private fun showManasik() {
+        val text = SeasonContent.MANASIK.joinToString("\n\n") { "${it.first}\n${it.second}" } +
+            "\n\nهذا ملخص مختصر، وللتفصيل راجع أهل العلم أو دليل الحاج الرسمي."
+        android.app.AlertDialog.Builder(this)
+            .setTitle("🕋 دليل مناسك الحج (التمتّع)")
+            .setMessage(text)
+            .setPositiveButton("تم", null)
+            .show()
     }
 
     private fun refreshStats(now: Long) {
