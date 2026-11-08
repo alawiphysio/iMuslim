@@ -24,6 +24,33 @@ object Times {
         return arr
     }
 
+    /** الحالة الحالية: ننتظر الأذان، أو أذّن وننتظر الإقامة */
+    data class State(
+        val iqamaPhase: Boolean,
+        val prayer: Prayer,
+        val adhanT: Long,
+        val iqamaT: Long,
+        val target: Long,     // الوقت اللي يعدّ له العدّاد
+        val progress: Float
+    )
+
+    fun state(ctx: Context, now: Long = System.currentTimeMillis()): State {
+        val prefs = Prefs(ctx)
+        // هل أذّن ولسا ما أقيمت الصلاة؟
+        for (d in 0 downTo -1) {
+            val arr = forDay(ctx, d, now)
+            for (p in Prayer.FIVE) {
+                val a = arr[p.ordinal]
+                val iq = a + prefs.iqamaMin(p) * 60_000L
+                if (prefs.iqamaMin(p) > 0 && now >= a && now < iq) {
+                    return State(true, p, a, iq, iq, ((now - a).toFloat() / (iq - a).toFloat()).coerceIn(0f, 1f))
+                }
+            }
+        }
+        val (p, t) = next(ctx, now)
+        return State(false, p, t, t + prefs.iqamaMin(p) * 60_000L, t, progress(ctx, now))
+    }
+
     /** وقت الصلاة اللي فاتت (لحساب امتلاء الحلقة) */
     fun prev(ctx: Context, now: Long = System.currentTimeMillis()): Long {
         for (d in 0 downTo -1) {

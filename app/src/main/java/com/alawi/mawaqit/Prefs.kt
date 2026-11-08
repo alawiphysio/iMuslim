@@ -51,6 +51,15 @@ class Prefs(ctx: Context) {
         get() = sp.getString("adhan_name", null)
         set(v) = sp.edit().putString("adhan_name", v).apply()
 
+    /** أذان الفجر (فيه «الصلاة خير من النوم») */
+    var fajrUri: String?
+        get() = sp.getString("fajr_uri", null)
+        set(v) = sp.edit().putString("fajr_uri", v).apply()
+
+    var fajrName: String?
+        get() = sp.getString("fajr_name", null)
+        set(v) = sp.edit().putString("fajr_name", v).apply()
+
     var firstRun: Boolean
         get() = sp.getBoolean("first_run", true)
         set(v) = sp.edit().putBoolean("first_run", v).apply()

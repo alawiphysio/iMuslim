@@ -55,6 +55,9 @@ class MainActivity : Activity() {
     private lateinit var nextTimeTv: TextView
     private lateinit var countdownTv: TextView
     private lateinit var soundTv: TextView
+    private lateinit var fajrSoundTv: TextView
+    private lateinit var nextLabelTv: TextView
+    private lateinit var ringCaptionTv: TextView
     private lateinit var minutesTv: TextView
     private lateinit var moonTv: TextView
     private lateinit var moonInfoTv: TextView
@@ -142,11 +145,22 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         val today = Times.forDay(this, 0, now)
         val (next, nextT) = Times.next(this, now)
-        lastNextT = nextT
+        val st = Times.state(this, now)
+        lastNextT = st.target
         cityTv.text = "📍 ${prefs.city}"
         dateTv.text = "${Hijri.format(now)}  •  ${Fmt.date(now)}"
-        nextNameTv.text = next.displayName(nextT)
-        nextTimeTv.text = "الأذان الساعة ${Fmt.time(nextT)}"
+        val stName = st.prayer.displayName(st.adhanT)
+        if (st.iqamaPhase) {
+            nextLabelTv.text = "حان وقت الصلاة • استعد للإقامة"
+            nextNameTv.text = "صلاة $stName"
+            nextTimeTv.text = "أذّن ${Fmt.time(st.adhanT)}  •  الإقامة ${Fmt.time(st.iqamaT)}"
+            ringCaptionTv.text = "للإقامة"
+        } else {
+            nextLabelTv.text = "الصلاة القادمة"
+            nextNameTv.text = stName
+            nextTimeTv.text = "الأذان ${Fmt.time(st.adhanT)}  •  الإقامة ${Fmt.time(st.iqamaT)}"
+            ringCaptionTv.text = "للأذان"
+        }
         val mp = Moon.phase(now)
         moonTv.text = "${mp.emoji}  ${mp.name}"
         moonView.frac = Moon.frac(now)
@@ -154,7 +168,7 @@ class MainActivity : Activity() {
         landmarkView.type = lm
         landmarkTv.text = lm.title
         landmarkTv.visibility = if (lm.title.isEmpty()) View.GONE else View.VISIBLE
-        ringView.setProgress(Times.progress(this, now), !ringIntroDone)
+        ringView.setProgress(st.progress, !ringIntroDone)
         ringIntroDone = true
         moonInfoTv.text = "الإضاءة ${Fmt.num(mp.illumination)}٪  •  عمر القمر ${Fmt.num(mp.ageDays.toInt() + 1)} يوم"
         for (p in Prayer.values()) {
@@ -163,7 +177,7 @@ class MainActivity : Activity() {
             rowTime[p]?.text = Fmt.time(t)
             rowIqama[p]?.text = if (p.hasAdhan && prefs.iqamaOn)
                 "الإقامة ${Fmt.time(t + prefs.iqamaMin(p) * 60_000L)}" else ""
-            val isNext = p == next && t == nextT
+            val isNext = p == st.prayer && t == st.adhanT
             rowBox[p]?.background = if (isNext) rounded(0x33D9B44A, 14f, 0x66D9B44A) else rounded(Color.TRANSPARENT, 14f)
             rowName[p]?.setTextColor(if (isNext) GOLD else TEXT)
             rowTime[p]?.setTextColor(if (isNext) GOLD else TEXT)
@@ -171,6 +185,7 @@ class MainActivity : Activity() {
             if (isNext && pulsedPrayer != p) { pulsedPrayer = p; pulse(rowIcon[p]) }
         }
         soundTv.text = "الصوت الحالي: " + (prefs.adhanName ?: "صوت المنبه الافتراضي (اختر ملف أذان)")
+        fajrSoundTv.text = "الصوت الحالي: " + (prefs.fajrName ?: "نفس الأذان العادي (اختر أذان الفجر)")
         tick()
     }
 
@@ -178,11 +193,11 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         if (lastNextT != 0L && now >= lastNextT) { refresh(); return }
         countdownTv.text = Fmt.countdown(lastNextT - now)
-        minutesTv.text = "باقي " + Fmt.minutesLeft(lastNextT - now)
+        minutesTv.text = "باقي " + Fmt.minutesLeft(lastNextT - now) + " " + ringCaptionTv.text
         val mins = ((lastNextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
         minutesBigTv.text = Fmt.num(mins)
         minutesUnitTv.text = when { mins == 1 -> "دقيقة"; mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" }
-        if (now / 1000 % 30 == 0L) ringView.setProgress(Times.progress(this, now), false)
+        if (now / 1000 % 30 == 0L) ringView.setProgress(Times.state(this, now).progress, false)
     }
 
     private fun checkExactAlarm() {
@@ -263,7 +278,7 @@ class MainActivity : Activity() {
     @Deprecated("Activity API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_SOUND && resultCode == RESULT_OK) {
+        if ((requestCode == REQ_SOUND || requestCode == REQ_SOUND_FAJR) && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             try {
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -274,10 +289,16 @@ class MainActivity : Activity() {
                     if (it.moveToFirst()) name = it.getString(0)
                 }
             } catch (e: Exception) { }
-            prefs.adhanUri = uri.toString()
-            prefs.adhanName = name ?: "ملف أذان"
+            if (requestCode == REQ_SOUND_FAJR) {
+                prefs.fajrUri = uri.toString()
+                prefs.fajrName = name ?: "أذان الفجر"
+                toast("تم اختيار أذان الفجر ✅")
+            } else {
+                prefs.adhanUri = uri.toString()
+                prefs.adhanName = name ?: "ملف أذان"
+                toast("تم اختيار صوت الأذان ✅")
+            }
             refresh()
-            toast("تم اختيار صوت الأذان ✅")
         }
     }
 
@@ -318,7 +339,8 @@ class MainActivity : Activity() {
         // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
         nextCard.gravity = Gravity.CENTER_HORIZONTAL
-        nextCard.addView(tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER })
+        nextLabelTv = tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER }
+        nextCard.addView(nextLabelTv)
         nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextNameTv)
 
@@ -337,6 +359,8 @@ class MainActivity : Activity() {
             it.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             it.layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
+        ringCaptionTv = tv("للأذان", 13f, MUTED).also { it.gravity = Gravity.CENTER }
+        inner.addView(ringCaptionTv)
         inner.addView(minutesBigTv); inner.addView(minutesUnitTv); inner.addView(countdownTv)
         ringBox.addView(inner, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
@@ -405,19 +429,13 @@ class MainActivity : Activity() {
         }
         root.addView(alerts)
 
-        // الصوت
+        // الصوت: أذان الفجر + أذان باقي الصلوات
         val sound = card()
         sound.addView(header("صوت الأذان"))
+        sound.addView(tv("أذان الظهر والعصر والمغرب والعشاء", 15f, TEXT, true))
         soundTv = tv("", 13f, MUTED)
         sound.addView(soundTv)
-        sound.addView(button("اختيار ملف الأذان (MP3) من الجوال") {
-            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "audio/*"
-            }
-            @Suppress("DEPRECATION")
-            startActivityForResult(i, REQ_SOUND)
-        })
+        sound.addView(button("🎵 اختيار ملف الأذان (MP3)") { pickSound(REQ_SOUND) })
         val testRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         testRow.addView(button("▶ تجربة") {
             AdhanService.start(this, Prayer.DHUHR, System.currentTimeMillis(), true)
@@ -425,6 +443,20 @@ class MainActivity : Activity() {
         testRow.addView(button("■ إيقاف", outline = true) { AdhanService.stop(this) },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         sound.addView(testRow)
+
+        sound.addView(divider())
+        sound.addView(tv("أذان الفجر 🌅", 15f, TEXT, true))
+        sound.addView(tv("أذان الفجر مختلف (فيه «الصلاة خير من النوم»)، اختر له ملف خاص.", 12f, MUTED))
+        fajrSoundTv = tv("", 13f, MUTED)
+        sound.addView(fajrSoundTv)
+        sound.addView(button("🎵 اختيار ملف أذان الفجر (MP3)") { pickSound(REQ_SOUND_FAJR) })
+        val fajrRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fajrRow.addView(button("▶ تجربة الفجر") {
+            AdhanService.start(this, Prayer.FAJR, System.currentTimeMillis(), true)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(8) })
+        fajrRow.addView(button("■ إيقاف", outline = true) { AdhanService.stop(this) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        sound.addView(fajrRow)
         sound.addView(tv("الأذان يطلع على صوت المنبه، تأكد إن صوت المنبه مو مقفّل.", 12f, MUTED))
         root.addView(sound)
 
@@ -470,6 +502,15 @@ class MainActivity : Activity() {
         })
         animateEntrance(root)
         return frame
+    }
+
+    private fun pickSound(req: Int) {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(i, req)
     }
 
     /** دخول البطاقات بحركة متتابعة (تظهر وتطلع من تحت) */
@@ -590,5 +631,6 @@ class MainActivity : Activity() {
         const val REQ_NOTIF = 1
         const val REQ_LOC = 2
         const val REQ_SOUND = 3
+        const val REQ_SOUND_FAJR = 4
     }
 }

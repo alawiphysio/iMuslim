@@ -41,7 +41,7 @@ class AdhanService : Service() {
         } else {
             startForeground(NOTIF_ID, n)
         }
-        play()
+        play(p)
         return START_NOT_STICKY
     }
 
@@ -53,7 +53,7 @@ class AdhanService : Service() {
         val open = PendingIntent.getActivity(
             this, 6, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        val title = if (test) "تجربة صوت الأذان" else "حان الآن موعد أذان ${p.displayName(t)}"
+        val title = if (test) "تجربة ${if (p == Prayer.FAJR) "أذان الفجر" else "الأذان"}" else "حان الآن موعد أذان ${p.displayName(t)}"
         return Notification.Builder(this, Notifier.CH_ADHAN)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(title)
@@ -72,10 +72,12 @@ class AdhanService : Service() {
             .build()
     }
 
-    private fun play() {
+    private fun play(p: Prayer) {
         release()
         val prefs = Prefs(this)
-        val custom = prefs.adhanUri?.let { Uri.parse(it) }
+        // الفجر له أذانه الخاص، ولو ما اخترت له ملف يستخدم الأذان العادي
+        val chosen = if (p == Prayer.FAJR) (prefs.fajrUri ?: prefs.adhanUri) else prefs.adhanUri
+        val custom = chosen?.let { Uri.parse(it) }
         val ok = custom != null && tryPlay(custom, false)
         if (!ok) {
             val def = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)

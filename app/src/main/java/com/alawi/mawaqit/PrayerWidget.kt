@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.widget.RemoteViews
 
 class PrayerWidget : AppWidgetProvider() {
@@ -25,6 +26,11 @@ class PrayerWidget : AppWidgetProvider() {
         Scheduler.scheduleNext(ctx)
     }
 
+    /** لما تفتح أو تقفل الـ Fold أو تغيّر حجم الويدجت نعيد رسم الخلفية بالمقاس الجديد */
+    override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle?) {
+        updateAll(ctx)
+    }
+
     override fun onEnabled(ctx: Context) {
         updateAll(ctx)
     }
@@ -40,6 +46,12 @@ class PrayerWidget : AppWidgetProvider() {
         private val names = intArrayOf(R.id.w_n0, R.id.w_n1, R.id.w_n2, R.id.w_n3, R.id.w_n4)
         private val times = intArrayOf(R.id.w_t0, R.id.w_t1, R.id.w_t2, R.id.w_t3, R.id.w_t4)
 
+        private fun minutesWord(m: Int) = when {
+            m == 2 -> "دقيقتين"
+            m in 3..10 -> "دقائق"
+            else -> "دقيقة"
+        }
+
         fun updateAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, PrayerWidget::class.java))
@@ -47,33 +59,67 @@ class PrayerWidget : AppWidgetProvider() {
                 cancelMinuteTick(ctx)
                 return
             }
-
             val now = System.currentTimeMillis()
-            val (next, nextT) = Times.next(ctx, now)
+            for (id in ids) {
+                try { mgr.updateAppWidget(id, build(ctx, mgr, id, now)) } catch (e: Exception) { }
+            }
+            scheduleMinuteTick(ctx, now)
+        }
+
+        private fun build(ctx: Context, mgr: AppWidgetManager, id: Int, now: Long): RemoteViews {
+            val prefs = Prefs(ctx)
+            val st = Times.state(ctx, now)
             val today = Times.forDay(ctx, 0, now)
+            val density = ctx.resources.displayMetrics.density
 
             val rv = RemoteViews(ctx.packageName, R.layout.widget_prayer)
-            rv.setTextViewText(R.id.w_next_name, next.displayName(nextT))
-            rv.setTextViewText(R.id.w_next_time, "الأذان ${Fmt.time(nextT)}")
-            rv.setTextViewText(R.id.w_hijri, Hijri.format(now))
-            // العدّاد بالدقائق داخل الحلقة الذهبية
-            val mins = ((nextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+
+            // الخلفية بمقاس الويدجت الفعلي
+            val opts = mgr.getAppWidgetOptions(id)
+            val wDp = (opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH) ?: 0).takeIf { it > 0 } ?: 320
+            val hDp = (opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT) ?: 0).takeIf { it > 0 } ?: 170
+            val scale = density.coerceAtMost(2.5f)
+            rv.setImageViewBitmap(R.id.w_bg, Art.widgetBackground(
+                (wDp * scale).toInt().coerceIn(200, 1400), (hDp * scale).toInt().coerceIn(100, 900),
+                Landmarks.detect(prefs.lat, prefs.lng), 24f * scale))
+
+            // الشخصية
+            rv.setImageViewBitmap(R.id.w_figure, Art.widgetFigure((64 * scale).toInt(), st.iqamaPhase))
+
+            val name = st.prayer.displayName(st.adhanT)
+            val mins = ((st.target - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+            if (st.iqamaPhase) {
+                rv.setTextViewText(R.id.w_label, "حان وقت الصلاة • استعد للإقامة")
+                rv.setTextViewText(R.id.w_next_name, "صلاة $name")
+                rv.setTextViewText(R.id.w_next_time, "أذّن ${Fmt.time(st.adhanT)}")
+                rv.setTextViewText(R.id.w_iqama, "الإقامة ${Fmt.time(st.iqamaT)} • باقي ${Fmt.minutesLeft(st.iqamaT - now)}")
+                rv.setTextViewText(R.id.w_ring_caption, "للإقامة")
+            } else {
+                rv.setTextViewText(R.id.w_label, "الصلاة القادمة")
+                rv.setTextViewText(R.id.w_next_name, name)
+                rv.setTextViewText(R.id.w_next_time, "الأذان ${Fmt.time(st.adhanT)}")
+                rv.setTextViewText(R.id.w_iqama, "الإقامة ${Fmt.time(st.iqamaT)}")
+                rv.setTextViewText(R.id.w_ring_caption, "للأذان")
+            }
+
+            // العدّاد بالدقائق داخل الحلقة
             rv.setTextViewText(R.id.w_countdown, Fmt.num(mins))
-            rv.setTextViewText(R.id.w_unit, when { mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" })
-            val density = ctx.resources.displayMetrics.density
-            rv.setImageViewBitmap(R.id.w_ring, Art.widgetRing((104 * density).toInt().coerceAtMost(420), Times.progress(ctx, now)))
+            rv.setTextViewText(R.id.w_unit, minutesWord(mins))
+            rv.setImageViewBitmap(R.id.w_ring, Art.widgetRing((100 * scale).toInt(), st.progress))
 
             // القمر
             val mp = Moon.phase(now)
-            rv.setImageViewBitmap(R.id.w_moon_img, Art.widgetMoon((30 * density * 1.6f).toInt(), Moon.frac(now)))
-            rv.setTextViewText(R.id.w_moon, "${mp.name} • ${Fmt.num(mp.illumination)}٪")
+            rv.setImageViewBitmap(R.id.w_moon_img, Art.widgetMoon((22 * scale * 1.7f).toInt(), Moon.frac(now)))
+            rv.setTextViewText(R.id.w_moon, "${mp.name} • ${Hijri.format(now)}")
 
+            // أوقات اليوم
             Prayer.FIVE.forEachIndexed { i, p ->
                 val t = today[p.ordinal]
                 rv.setTextViewText(names[i], p.displayName(t))
                 rv.setTextViewText(times[i], Fmt.time(t).replace(" ص", "").replace(" م", ""))
-                val highlight = p == next && nextT == t
+                val highlight = p == st.prayer && t == st.adhanT
                 rv.setInt(cells[i], "setBackgroundResource", if (highlight) R.drawable.cell_bg else 0)
+                rv.setTextColor(names[i], if (highlight) C_GOLD else 0xFFA9BDB4.toInt())
             }
 
             val open = PendingIntent.getActivity(
@@ -81,8 +127,7 @@ class PrayerWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             rv.setOnClickPendingIntent(R.id.w_root, open)
-            mgr.updateAppWidget(ids, rv)
-            scheduleMinuteTick(ctx, now)
+            return rv
         }
 
         private fun tickIntent(ctx: Context): PendingIntent = PendingIntent.getBroadcast(
