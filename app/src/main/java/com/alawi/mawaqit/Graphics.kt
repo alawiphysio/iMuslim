@@ -239,6 +239,163 @@ object Art {
         }
     }
 
+    // ---------------- شخصيات: ذاهب للصلاة / يصلي ----------------
+
+    private fun figurePaints(s: Float): Pair<Paint, Paint> {
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, 0f, s, C_GOLD_LIGHT, C_GOLD, Shader.TileMode.CLAMP)
+        }
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = C_GOLD
+            style = Paint.Style.STROKE
+            strokeWidth = s * 0.055f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        return Pair(fill, line)
+    }
+
+    /** رجل بالثوب يمشي باتجاه المسجد (قبل الأذان) */
+    fun drawWalker(c: Canvas, s: Float) {
+        val (fill, line) = figurePaints(s)
+        // المسجد الصغير
+        val m = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x99D9B44A.toInt() }
+        c.drawRect(s * 0.66f, s * 0.64f, s * 0.95f, s * 0.90f, m)
+        c.drawArc(RectF(s * 0.70f, s * 0.50f, s * 0.91f, s * 0.78f), 180f, 180f, true, m)
+        c.drawRect(s * 0.955f - s * 0.03f, s * 0.40f, s * 0.955f, s * 0.90f, m)
+        val door = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B231E.toInt() }
+        c.drawRoundRect(RectF(s * 0.77f, s * 0.74f, s * 0.84f, s * 0.90f), s * 0.03f, s * 0.03f, door)
+        // الأرض
+        val ground = Paint(line).apply { alpha = 120; strokeWidth = s * 0.025f }
+        c.drawLine(s * 0.04f, s * 0.92f, s * 0.97f, s * 0.92f, ground)
+        // الرأس (بالشماغ)
+        c.drawCircle(s * 0.34f, s * 0.22f, s * 0.075f, fill)
+        val shemagh = Path()
+        shemagh.moveTo(s * 0.26f, s * 0.20f)
+        shemagh.quadTo(s * 0.34f, s * 0.10f, s * 0.42f, s * 0.20f)
+        shemagh.lineTo(s * 0.44f, s * 0.36f)
+        shemagh.lineTo(s * 0.24f, s * 0.36f)
+        shemagh.close()
+        c.drawPath(shemagh, fill)
+        // الثوب، مايل لقدام
+        val body = Path()
+        body.moveTo(s * 0.27f, s * 0.33f)
+        body.lineTo(s * 0.43f, s * 0.33f)
+        body.lineTo(s * 0.48f, s * 0.82f)
+        body.lineTo(s * 0.22f, s * 0.82f)
+        body.close()
+        c.drawPath(body, fill)
+        // الرجلين (خطوة)
+        c.drawLine(s * 0.42f, s * 0.80f, s * 0.52f, s * 0.91f, line)
+        c.drawLine(s * 0.28f, s * 0.80f, s * 0.19f, s * 0.91f, line)
+        // اليدين
+        c.drawLine(s * 0.29f, s * 0.40f, s * 0.19f, s * 0.58f, line)
+        c.drawLine(s * 0.41f, s * 0.40f, s * 0.50f, s * 0.56f, line)
+    }
+
+    /** رجل في الركوع على سجادة (بعد الأذان، انتظار الإقامة) */
+    fun drawPraying(c: Canvas, s: Float) {
+        val (fill, line) = figurePaints(s)
+        // السجادة
+        val mat = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66D9B44A }
+        val matRect = RectF(s * 0.04f, s * 0.87f, s * 0.96f, s * 0.95f)
+        c.drawRoundRect(matRect, s * 0.02f, s * 0.02f, mat)
+        val matEdge = Paint(line).apply { strokeWidth = s * 0.015f; alpha = 200 }
+        c.drawRoundRect(matRect, s * 0.02f, s * 0.02f, matEdge)
+        // الرجلين (ثوب)
+        val legs = Path()
+        legs.moveTo(s * 0.57f, s * 0.42f)
+        legs.lineTo(s * 0.77f, s * 0.42f)
+        legs.lineTo(s * 0.79f, s * 0.86f)
+        legs.lineTo(s * 0.55f, s * 0.86f)
+        legs.close()
+        c.drawPath(legs, fill)
+        // الظهر مستوي (ركوع)
+        c.drawRoundRect(RectF(s * 0.26f, s * 0.33f, s * 0.77f, s * 0.50f), s * 0.08f, s * 0.08f, fill)
+        // الرأس مع الشماغ المتدلي
+        c.drawCircle(s * 0.17f, s * 0.42f, s * 0.085f, fill)
+        val shemagh = Path()
+        shemagh.moveTo(s * 0.10f, s * 0.38f)
+        shemagh.quadTo(s * 0.18f, s * 0.30f, s * 0.28f, s * 0.36f)
+        shemagh.lineTo(s * 0.27f, s * 0.62f)
+        shemagh.lineTo(s * 0.13f, s * 0.58f)
+        shemagh.close()
+        c.drawPath(shemagh, fill)
+        // اليد على الركبة
+        val arm = Paint(line).apply { strokeWidth = s * 0.07f }
+        c.drawLine(s * 0.36f, s * 0.46f, s * 0.58f, s * 0.68f, arm)
+    }
+
+    fun widgetFigure(sizePx: Int, iqamaPhase: Boolean): Bitmap {
+        val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        // هالة خلف الشخصية
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG)
+        halo.shader = RadialGradient(sizePx / 2f, sizePx / 2f, sizePx / 2f,
+            intArrayOf(0x40D9B44A, 0x00D9B44A), null, Shader.TileMode.CLAMP)
+        c.drawCircle(sizePx / 2f, sizePx / 2f, sizePx / 2f, halo)
+        c.save()
+        c.translate(sizePx * 0.03f, sizePx * 0.02f)
+        val s = sizePx * 0.94f
+        if (iqamaPhase) drawPraying(c, s) else drawWalker(c, s)
+        c.restore()
+        return bmp
+    }
+
+    /** خلفية الويدجت: سماء + نجوم + رسمة مسجد مدينتك باهتة + حواف دائرية */
+    fun widgetBackground(wPx: Int, hPx: Int, landmark: Landmarks.Type, radiusPx: Float): Bitmap {
+        val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val w = wPx.toFloat(); val h = hPx.toFloat()
+        val clip = Path().apply { addRoundRect(RectF(0f, 0f, w, h), radiusPx, radiusPx, Path.Direction.CW) }
+        c.clipPath(clip)
+        val bg = Paint().apply {
+            shader = LinearGradient(0f, 0f, w * 0.3f, h, 0xF2071814.toInt(), 0xF2104236.toInt(), Shader.TileMode.CLAMP)
+        }
+        c.drawRect(0f, 0f, w, h, bg)
+        // نجوم
+        val rnd = Random(11)
+        val star = Paint(Paint.ANTI_ALIAS_FLAG)
+        repeat(40) {
+            star.color = Color.argb(60 + rnd.nextInt(140), 255, 245, 215)
+            c.drawCircle(rnd.nextFloat() * w, rnd.nextFloat() * h * 0.6f, 0.6f + rnd.nextFloat() * (h / 140f), star)
+        }
+        // توهج ذهبي خفيف
+        val glow = Paint(Paint.ANTI_ALIAS_FLAG)
+        glow.shader = RadialGradient(w * 0.15f, h * 0.35f, h * 0.9f,
+            intArrayOf(0x22D9B44A, 0x00D9B44A), null, Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, glow)
+        // رسمة المسجد في الأسفل باهتة
+        val lh = h * 0.42f
+        val lw = (lh * 2.1f).coerceAtMost(w * 0.75f)
+        c.save()
+        c.translate((w - lw) / 2f, h - lh)
+        // نرسمها كظل ذهبي موحّد باهت (بدون ألوان) عشان ما تزحم النص
+        c.saveLayerAlpha(0f, 0f, lw, lh, 40)
+        Landmarks.draw(c, landmark, lw, lh)
+        val tint = Paint().apply {
+            color = C_GOLD
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+        }
+        c.drawRect(0f, 0f, lw, lh, tint)
+        c.restore()
+        c.restore()
+        // تظليل سفلي عشان صف الأوقات يكون واضح
+        val shade = Paint().apply {
+            shader = LinearGradient(0f, h * 0.55f, 0f, h, 0x00071814, 0xCC071814.toInt(), Shader.TileMode.CLAMP)
+        }
+        c.drawRect(0f, h * 0.55f, w, h, shade)
+        // إطار ذهبي رفيع
+        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = h / 110f
+            shader = LinearGradient(0f, 0f, w, h, 0x99F6DE8D.toInt(), 0x33D9B44A, Shader.TileMode.CLAMP)
+        }
+        c.drawRoundRect(RectF(border.strokeWidth / 2, border.strokeWidth / 2, w - border.strokeWidth / 2, h - border.strokeWidth / 2),
+            radiusPx, radiusPx, border)
+        return bmp
+    }
+
     // ---------------- صور الويدجت ----------------
     fun widgetRing(sizePx: Int, progress: Float): Bitmap {
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
