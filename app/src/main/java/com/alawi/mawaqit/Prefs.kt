@@ -69,6 +69,33 @@ object Fmt {
     fun time(ms: Long): String = SimpleDateFormat("h:mm a", ar).format(Date(ms))
     fun date(ms: Long): String = SimpleDateFormat("EEEE d MMMM yyyy", ar).format(Date(ms))
     fun num(n: Int): String = NumberFormat.getInstance(ar).apply { isGroupingUsed = false }.format(n)
+    /** "باقي ٤٥ دقيقة" أو "ساعة و ٢٠ دقيقة" أو "٣ ساعات و ٥ دقائق" */
+    fun minutesLeft(diffMs: Long): String {
+        val total = ((diffMs + 59_999L) / 60_000L).coerceAtLeast(0L).toInt()
+        if (total == 0) return "حان الآن"
+        val h = total / 60
+        val m = total % 60
+        val hPart = when (h) {
+            0 -> ""
+            1 -> "ساعة"
+            2 -> "ساعتين"
+            in 3..10 -> "${num(h)} ساعات"
+            else -> "${num(h)} ساعة"
+        }
+        val mPart = when (m) {
+            0 -> ""
+            1 -> "دقيقة"
+            2 -> "دقيقتين"
+            in 3..10 -> "${num(m)} دقائق"
+            else -> "${num(m)} دقيقة"
+        }
+        return when {
+            hPart.isEmpty() -> mPart
+            mPart.isEmpty() -> hPart
+            else -> "$hPart و $mPart"
+        }
+    }
+
     fun countdown(diffMs: Long): String {
         val s = (diffMs / 1000).coerceAtLeast(0)
         return String.format(Locale.US, "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
