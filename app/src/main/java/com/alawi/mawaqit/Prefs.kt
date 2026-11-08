@@ -60,6 +60,26 @@ class Prefs(ctx: Context) {
         get() = sp.getString("fajr_name", null)
         set(v) = sp.edit().putString("fajr_name", v).apply()
 
+    /** الأذان يشتغل حتى لو الجوال صامت */
+    var adhanInSilent: Boolean
+        get() = sp.getBoolean("adhan_silent", true)
+        set(v) = sp.edit().putBoolean("adhan_silent", v).apply()
+
+    /** الأذان يشتغل حتى في وضع عدم الإزعاج */
+    var adhanInDnd: Boolean
+        get() = sp.getBoolean("adhan_dnd", true)
+        set(v) = sp.edit().putBoolean("adhan_dnd", v).apply()
+
+    /** وميض الفلاش وقت الأذان لما الجوال صامت */
+    var flashOn: Boolean
+        get() = sp.getBoolean("flash_on", true)
+        set(v) = sp.edit().putBoolean("flash_on", v).apply()
+
+    /** شاشة الأذان الملونة الكاملة */
+    var fullScreenOn: Boolean
+        get() = sp.getBoolean("fullscreen_on", true)
+        set(v) = sp.edit().putBoolean("fullscreen_on", v).apply()
+
     var muezzinId: String?
         get() = sp.getString("muezzin_id", null)
         set(v) = sp.edit().putString("muezzin_id", v).apply()

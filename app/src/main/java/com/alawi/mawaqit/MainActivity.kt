@@ -531,6 +531,31 @@ class MainActivity : Activity() {
         }
         root.addView(loc)
 
+        // الوضع القوي: صامت + عدم إزعاج
+        val strong = card()
+        strong.addView(header("💪 الوضع القوي"))
+        strong.addView(switch("الأذان يشتغل حتى لو الجوال صامت", prefs.adhanInSilent) { prefs.adhanInSilent = it })
+        strong.addView(switch("الأذان يشتغل في وضع عدم الإزعاج", prefs.adhanInDnd) { prefs.adhanInDnd = it })
+        strong.addView(switch("شاشة الأذان الملونة الكاملة", prefs.fullScreenOn) { prefs.fullScreenOn = it })
+        strong.addView(switch("وميض الفلاش واهتزاز لما الجوال صامت", prefs.flashOn) { prefs.flashOn = it })
+        strong.addView(button("🔕 السماح بتجاوز «عدم الإزعاج»") {
+            try { startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) } catch (e: Exception) { }
+        })
+        if (Build.VERSION.SDK_INT >= 34) {
+            strong.addView(button("📱 السماح بشاشة الأذان الكاملة", outline = true) {
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName")))
+                } catch (e: Exception) { }
+            })
+        }
+        strong.addView(button("👁 معاينة شاشة الأذان", outline = true) {
+            val (np, nt) = Times.next(this)
+            startActivity(Intent(this, AdhanActivity::class.java)
+                .putExtra(Scheduler.EXTRA_PRAYER, np.key).putExtra(Scheduler.EXTRA_TIME, nt))
+        })
+        strong.addView(tv("في سامسونج: فعّل كمان «إضاءة الحواف» من الإعدادات ← الشاشة، عشان تنوّر أطراف الشاشة وقت الأذان.", 12f, MUTED))
+        root.addView(strong)
+
         // التذكير الصوتي
         val voice = card()
         voice.addView(header("🗣 التطبيق يكلّمك"))

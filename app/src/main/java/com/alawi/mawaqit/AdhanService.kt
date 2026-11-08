@@ -50,7 +50,14 @@ class AdhanService : Service() {
             MODE_SPEAK -> intent?.getStringExtra(EXTRA_TITLE) ?: "تذكير الصلاة"
             else -> if (test) "تجربة ${if (p == Prayer.FAJR) "أذان الفجر" else "الأذان"}" else "حان الآن موعد أذان ${p.displayName(t)}"
         }
-        val n = buildNotification(title, "${prefs.city} • ${Fmt.time(t)}")
+        val fullScreen = if (mode == MODE_ADHAN && prefs.fullScreenOn) PendingIntent.getActivity(
+            this, 8, Intent(this, AdhanActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(Scheduler.EXTRA_PRAYER, p.key)
+                putExtra(Scheduler.EXTRA_TIME, t)
+            }, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        ) else null
+        val n = buildNotification(title, "${prefs.city} • ${Fmt.time(t)}", fullScreen)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         } else {
@@ -64,6 +71,17 @@ class AdhanService : Service() {
                 handler.postDelayed(stopper, 60_000L)
             }
             else -> {
+                val silent = isPhoneSilent()
+                if (silent || isDndOn()) {
+                    if (prefs.flashOn) Effects.startFlash(this)
+                    Effects.vibrate(this)
+                }
+                if (isDndOn() && prefs.adhanInDnd) Effects.allowAlarmsThroughDnd(this)
+                if (silent && !prefs.adhanInSilent && !test) {
+                    // اخترت إن الأذان ما يطلع صوت في الصامت: ألوان + فلاش + اهتزاز فقط
+                    handler.postDelayed(stopper, 60_000L)
+                    return START_NOT_STICKY
+                }
                 // قبل الأذان يقول جملة قصيرة ثم يبدأ الأذان
                 val intro = if (test) null else Voice.adhanIntro(prefs.userName, p, t)
                 if (prefs.voiceOn && intro != null) speak(intro) { play(p) } else play(p)
@@ -72,7 +90,7 @@ class AdhanService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun buildNotification(title: String, text: String): Notification {
+    private fun buildNotification(title: String, text: String, fullScreen: PendingIntent? = null): Notification {
         val stopPi = PendingIntent.getService(
             this, 5, Intent(this, AdhanService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -89,6 +107,7 @@ class AdhanService : Service() {
             .setCategory(Notification.CATEGORY_ALARM)
             .setColor(0xFFD9B44A.toInt())
             .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .also { b -> if (fullScreen != null) b.setFullScreenIntent(fullScreen, true) }
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, android.R.drawable.ic_media_pause),
@@ -185,7 +204,19 @@ class AdhanService : Service() {
         tts = null
     }
 
+    private fun isPhoneSilent(): Boolean {
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return false
+        return am.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL
+    }
+
+    private fun isDndOn(): Boolean {
+        val nm = getSystemService(android.app.NotificationManager::class.java) ?: return false
+        return nm.currentInterruptionFilter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+    }
+
     override fun onDestroy() {
+        Effects.stopFlash(this)
+        Effects.restoreDnd(this)
         release()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
@@ -226,6 +257,72 @@ class AdhanService : Service() {
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, AdhanService::class.java).setAction(ACTION_STOP))
         }
+    }
+}
+
+/** مؤثرات قوية: فلاش، اهتزاز، تجاوز عدم الإزعاج */
+object Effects {
+    private val handler = Handler(Looper.getMainLooper())
+    private var flashing = false
+    private var savedFilter: Int? = null
+
+    fun startFlash(ctx: Context) {
+        val cm = ctx.getSystemService(android.hardware.camera2.CameraManager::class.java) ?: return
+        val id = try {
+            cm.cameraIdList.firstOrNull {
+                cm.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            }
+        } catch (e: Exception) { null } ?: return
+        flashing = true
+        var on = false
+        var count = 0
+        val r = object : Runnable {
+            override fun run() {
+                if (!flashing || count > 60) { try { cm.setTorchMode(id, false) } catch (e: Exception) { }; return }
+                on = !on; count++
+                try { cm.setTorchMode(id, on) } catch (e: Exception) { flashing = false; return }
+                handler.postDelayed(this, if (on) 250L else 650L)
+            }
+        }
+        handler.post(r)
+    }
+
+    fun stopFlash(ctx: Context) {
+        if (!flashing) return
+        flashing = false
+        val cm = ctx.getSystemService(android.hardware.camera2.CameraManager::class.java) ?: return
+        try { cm.cameraIdList.forEach { try { cm.setTorchMode(it, false) } catch (e: Exception) { } } } catch (e: Exception) { }
+    }
+
+    fun vibrate(ctx: Context) {
+        val pattern = longArrayOf(0, 900, 500, 900, 500, 900, 500, 1400)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = ctx.getSystemService(android.os.VibratorManager::class.java)
+                vm?.defaultVibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                v?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+            }
+        } catch (e: Exception) { }
+    }
+
+    /** لو وضع «صمت تام» مانع المنبهات: نسمح بالمنبهات مؤقتاً ونرجعه بعد الأذان (يحتاج إذن) */
+    fun allowAlarmsThroughDnd(ctx: Context) {
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java) ?: return
+        if (!nm.isNotificationPolicyAccessGranted) return
+        if (nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_NONE) {
+            savedFilter = nm.currentInterruptionFilter
+            try { nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALARMS) } catch (e: Exception) { savedFilter = null }
+        }
+    }
+
+    fun restoreDnd(ctx: Context) {
+        val f = savedFilter ?: return
+        savedFilter = null
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java) ?: return
+        try { nm.setInterruptionFilter(f) } catch (e: Exception) { }
     }
 }
 
