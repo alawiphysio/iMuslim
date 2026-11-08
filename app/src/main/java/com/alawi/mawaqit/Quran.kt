@@ -141,8 +141,8 @@ object QuranPrefs {
     fun listenSurah(ctx: Context) = sp(ctx).getInt("listen_s", 0)
     fun listenMs(ctx: Context) = sp(ctx).getInt("listen_ms", 0)
     fun setListen(ctx: Context, s: Int, ms: Int) = sp(ctx).edit().putInt("listen_s", s).putInt("listen_ms", ms).apply()
-    fun fontSize(ctx: Context) = sp(ctx).getFloat("font", 27f)
-    fun setFontSize(ctx: Context, v: Float) = sp(ctx).edit().putFloat("font", v).apply()
+    fun fontSize(ctx: Context) = sp(ctx).getFloat("font2", 36f)
+    fun setFontSize(ctx: Context, v: Float) = sp(ctx).edit().putFloat("font2", v).apply()
     fun paper(ctx: Context) = sp(ctx).getBoolean("paper", false)
     fun setPaper(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("paper", v).apply()
     fun bookmarks(ctx: Context): List<Pair<Int, Int>> =
@@ -356,7 +356,7 @@ class QuranActivity : Activity() {
         r.addView(tv(badge, 13f, C_GOLD, true).apply { gravity = Gravity.CENTER; background = rounded(0x26D9B44A, 14f) },
             LinearLayout.LayoutParams(dp(40), dp(40)).also { it.marginEnd = dp(12) })
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(tv(title, 18f, C_TEXT, true).apply { typeface = resources.getFont(R.font.amiri_quran) })
+        col.addView(tv(title, 22f, C_TEXT, true).apply { typeface = resources.getFont(R.font.amiri_quran) })
         col.addView(tv(sub, 12f, 0xFFA9BDB4.toInt()))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return r
@@ -410,7 +410,7 @@ class QuranReaderActivity : Activity() {
     private lateinit var surah: Surah
     private lateinit var list: ListView
     private lateinit var adapter: VerseAdapter
-    private var fontSize = 27f
+    private var fontSize = 36f
     private var paper = false
     private var highlight = -1
     private var follow = false
@@ -458,8 +458,8 @@ class QuranReaderActivity : Activity() {
         bar.addView(TextView(this).apply {
             text = "سورة ${surah.name}"; textSize = 22f; setTextColor(accent); gravity = Gravity.CENTER; typeface = amiri
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(btn("أ−") { setFont(fontSize - 2f) })
-        bar.addView(btn("أ+") { setFont(fontSize + 2f) })
+        bar.addView(btn("أ−") { setFont(fontSize - 4f) })
+        bar.addView(btn("أ+") { setFont(fontSize + 4f) })
         bar.addView(btn(if (paper) "🌙" else "📜") { paper = !paper; QuranPrefs.setPaper(this, paper); build(firstVisibleAyah()) })
         bar.addView(btn("▶") { go(surah.n + 1) })
         root.addView(bar)
@@ -522,7 +522,7 @@ class QuranReaderActivity : Activity() {
     private fun firstVisibleAyah() = list.firstVisiblePosition.coerceAtLeast(1)
 
     private fun setFont(v: Float) {
-        fontSize = v.coerceIn(18f, 48f)
+        fontSize = v.coerceIn(24f, 64f)
         QuranPrefs.setFontSize(this, fontSize)
         adapter.notifyDataSetChanged()
     }
@@ -640,7 +640,7 @@ class QuranReaderActivity : Activity() {
                 typeface = amiri
                 textSize = fontSize
                 setTextColor(fg)
-                setLineSpacing(0f, 1.45f)
+                setLineSpacing(0f, 1.6f)
                 gravity = Gravity.START
                 textDirection = View.TEXT_DIRECTION_RTL
                 setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -664,7 +664,7 @@ class QuranReaderActivity : Activity() {
             }
             box.addView(TextView(this@QuranReaderActivity).apply {
                 text = "سورة ${surah.name}"
-                typeface = amiri; textSize = 30f; setTextColor(accent); gravity = Gravity.CENTER
+                typeface = amiri; textSize = 36f; setTextColor(accent); gravity = Gravity.CENTER
                 setPadding(dp(20), dp(10), dp(20), dp(10))
                 background = GradientDrawable().apply {
                     cornerRadius = dp(16).toFloat(); setStroke(dp(2), accent)
@@ -678,7 +678,7 @@ class QuranReaderActivity : Activity() {
             })
             val b = Quran.basmala(surah)
             if (b.isNotEmpty()) box.addView(TextView(this@QuranReaderActivity).apply {
-                text = b; typeface = amiri; textSize = fontSize + 2f; setTextColor(fg); gravity = Gravity.CENTER
+                text = b; typeface = amiri; textSize = fontSize + 4f; setTextColor(fg); gravity = Gravity.CENTER
                 setPadding(0, dp(14), 0, dp(4))
             })
             return box

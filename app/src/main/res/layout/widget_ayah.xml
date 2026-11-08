@@ -28,7 +28,7 @@
         android:lineSpacingMultiplier="1.3"
         android:maxLines="5"
         android:textColor="#FFF4EFE1"
-        android:textSize="18sp" />
+        android:textSize="22sp" />
 
     <TextView
         android:id="@+id/a_ref"
