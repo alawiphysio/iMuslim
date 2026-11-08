@@ -60,6 +60,7 @@ class MainActivity : Activity() {
     private lateinit var fajrSoundTv: TextView
     private lateinit var nextLabelTv: TextView
     private lateinit var figureIv: ImageView
+    private var splashShown = false
     private lateinit var landmarkImg: ImageView
     private lateinit var betweenBtn: Button
     private val rowMark = HashMap<Prayer, TextView>()
@@ -299,7 +300,20 @@ class MainActivity : Activity() {
         countdownTv.text = Fmt.countdown(lastNextT - now)
         minutesTv.text = Fmt.minutesLeft(lastNextT - now)
         val mins = ((lastNextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
-        minutesBigTv.text = Fmt.num(mins)
+        val newText = Fmt.num(mins)
+        if (minutesBigTv.text.toString() != newText) {
+            if (minutesBigTv.text.isNullOrEmpty()) minutesBigTv.text = newText
+            else {
+                // الرقم القديم يطلع لفوق ويختفي، والجديد ينزل مكانه
+                minutesBigTv.animate().translationY(-dp(18).toFloat()).alpha(0f).setDuration(180).withEndAction {
+                    minutesBigTv.text = newText
+                    minutesBigTv.translationY = dp(18).toFloat()
+                    minutesBigTv.animate().translationY(0f).alpha(1f).setDuration(260)
+                        .setInterpolator(DecelerateInterpolator(1.6f)).start()
+                }.start()
+            }
+        }
+        ringView.urgent = mins <= 10
         minutesUnitTv.text = when { mins == 1 -> "دقيقة"; mins == 2 -> "دقيقتين"; mins in 3..10 -> "دقائق"; else -> "دقيقة" }
         if (now / 1000 % 30 == 0L) {
             val p = Times.state(this, now).progress
@@ -424,10 +438,12 @@ class MainActivity : Activity() {
 
     private fun buildUi(): View {
         val frame = FrameLayout(this)
-        frame.addView(SkyView(this), FrameLayout.LayoutParams(
+        val sky = SkyView(this)
+        frame.addView(sky, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val scroll = ScrollView(this)
         scroll.isVerticalScrollBarEnabled = false
+        scroll.setOnScrollChangeListener { _, _, y, _, _ -> sky.parallax = y * 0.25f }
         frame.addView(scroll, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val root = LinearLayout(this).apply {
@@ -553,6 +569,7 @@ class MainActivity : Activity() {
             addView(tv(icon, 28f, TEXT).also { it.gravity = Gravity.CENTER })
             addView(tv(label, 13f, GOLD, true).also { it.gravity = Gravity.CENTER })
             setOnClickListener { onClick() }
+            Press.apply(this)
         }
         val tiles = listOf(
             tile("📖", "المصحف") { startActivity(Intent(this, QuranActivity::class.java)) },
@@ -887,6 +904,7 @@ class MainActivity : Activity() {
             it.gravity = Gravity.CENTER; it.setPadding(0, dp(16), 0, 0)
         })
         animateEntrance(root)
+        addSplash(frame)
         return frame
     }
 
@@ -1024,6 +1042,27 @@ class MainActivity : Activity() {
         startActivityForResult(i, req)
     }
 
+    /** شاشة افتتاح قصيرة (صورة الكعبة من Canva) تختفي بنعومة */
+    private fun addSplash(frame: FrameLayout) {
+        val res = Pictures.splash(this)
+        if (res == 0 || splashShown) return
+        splashShown = true
+        val box = FrameLayout(this).apply { setBackgroundColor(0xFF061512.toInt()); isClickable = true }
+        box.addView(ImageView(this).apply { setImageResource(res); scaleType = ImageView.ScaleType.CENTER_CROP },
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val title = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        title.addView(tv("i.Muslim", 44f, GOLD, true).also {
+            it.typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
+            it.setShadowLayer(dp(16).toFloat(), 0f, 0f, 0xCC000000.toInt())
+        })
+        title.addView(tv("الصلاة يا مسلم", 18f, TEXT).also { it.gravity = Gravity.CENTER; it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0xCC000000.toInt()) })
+        box.addView(title, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP).also { it.topMargin = dp(140) })
+        frame.addView(box, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        title.alpha = 0f; title.translationY = dp(20).toFloat()
+        title.animate().alpha(1f).translationY(0f).setDuration(700).setStartDelay(150).start()
+        box.animate().alpha(0f).setStartDelay(1500).setDuration(600).withEndAction { frame.removeView(box) }.start()
+    }
+
     /** دخول البطاقات بحركة متتابعة (تظهر وتطلع من تحت) */
     private fun animateEntrance(root: LinearLayout) {
         for (i in 0 until root.childCount) {
@@ -1101,6 +1140,7 @@ class MainActivity : Activity() {
         setTextColor(if (outline) GOLD else BG)
         background = if (outline) rounded(Color.TRANSPARENT, 14f, GOLD) else rounded(GOLD, 14f)
         setOnClickListener { onClick() }
+        Press.apply(this)
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).also { it.topMargin = dp(10) }
