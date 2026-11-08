@@ -60,6 +60,7 @@ class MainActivity : Activity() {
     private lateinit var fajrSoundTv: TextView
     private lateinit var nextLabelTv: TextView
     private lateinit var figureIv: ImageView
+    private lateinit var landmarkImg: ImageView
     private lateinit var contentRoot: LinearLayout
     private val muezzinCards = HashMap<String, LinearLayout>()
     private var lastIqamaPhase: Boolean? = null
@@ -158,7 +159,7 @@ class MainActivity : Activity() {
         val stName = st.prayer.displayName(st.adhanT)
         if (lastIqamaPhase != st.iqamaPhase) {
             lastIqamaPhase = st.iqamaPhase
-            figureIv.setImageResource(if (st.iqamaPhase) R.drawable.fig_praying else R.drawable.fig_walker)
+            figureIv.setImageResource(Pictures.figure(this, st.iqamaPhase))
             figureIv.alpha = 0f; figureIv.scaleX = 0.8f; figureIv.scaleY = 0.8f
             figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
                 .setInterpolator(DecelerateInterpolator(2f)).start()
@@ -179,6 +180,15 @@ class MainActivity : Activity() {
         moonView.frac = Moon.frac(now)
         val lm = Landmarks.detect(prefs.lat, prefs.lng)
         landmarkView.type = lm
+        val lmImg = Pictures.landmark(this, lm)
+        if (lmImg != 0) {
+            landmarkImg.setImageResource(lmImg)
+            landmarkImg.visibility = View.VISIBLE
+            landmarkView.visibility = View.GONE
+        } else {
+            landmarkImg.visibility = View.GONE
+            landmarkView.visibility = View.VISIBLE
+        }
         landmarkTv.text = lm.title
         landmarkTv.visibility = if (lm.title.isEmpty()) View.GONE else View.VISIBLE
         ringView.setProgress(st.progress, !ringIntroDone)
@@ -353,14 +363,25 @@ class MainActivity : Activity() {
         landmarkView = LandmarkView(this)
         root.addView(landmarkView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
+        landmarkImg = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            background = rounded(0x22000000, 22f)
+            visibility = View.GONE
+        }
+        root.addView(landmarkImg, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
         landmarkTv = tv("", 14f, GOLD, true).also { it.gravity = Gravity.CENTER }
         root.addView(landmarkTv)
 
         // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
         nextCard.gravity = Gravity.CENTER_HORIZONTAL
-        figureIv = ImageView(this)
-        nextCard.addView(figureIv, LinearLayout.LayoutParams(dp(110), dp(110)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+        figureIv = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            background = rounded(0x22000000, 24f)
+        }
+        nextCard.addView(figureIv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(200)).also { it.bottomMargin = dp(10) })
         nextLabelTv = tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextLabelTv)
         nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }
