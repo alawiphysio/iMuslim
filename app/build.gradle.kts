@@ -42,6 +42,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    androidResources {
+        noCompress += listOf("ogg")
+    }
     lint {
         abortOnError = false
         checkReleaseBuilds = false

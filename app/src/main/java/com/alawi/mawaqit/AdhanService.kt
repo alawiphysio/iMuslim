@@ -135,7 +135,15 @@ class AdhanService : Service() {
             if (lang == TextToSpeech.LANG_MISSING_DATA || lang == TextToSpeech.LANG_NOT_SUPPORTED) {
                 engine.setLanguage(Locale("ar"))
             }
-            engine.setSpeechRate(0.92f)
+            // نختار صوت رجل عربي لو متوفر في الجوال (Google: ar-xa-x-ard / are)
+            try {
+                val ar = engine.voices?.filter { it.locale.language == "ar" && !it.isNetworkConnectionRequired } ?: emptyList()
+                val male = ar.firstOrNull { it.name.contains("male", true) && !it.name.contains("female", true) }
+                    ?: ar.firstOrNull { it.name.contains("-ard") || it.name.contains("-are") }
+                if (male != null) engine.voice = male
+            } catch (e: Exception) { }
+            engine.setSpeechRate(0.9f)
+            engine.setPitch(0.92f)
             engine.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
