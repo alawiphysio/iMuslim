@@ -396,10 +396,12 @@ class MainActivity : Activity() {
         applyFoldPadding()
 
         // رأس الصفحة: العنوان + المدينة + التاريخ
-        root.addView(tv("الصلاة يا مسلم", 30f, GOLD, true).also {
+        root.addView(tv("i.Muslim", 32f, GOLD, true).also {
+            it.typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
             it.gravity = Gravity.CENTER
             it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
         })
+        root.addView(tv("الصلاة يا مسلم", 13f, MUTED).also { it.gravity = Gravity.CENTER })
         cityTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
         dateTv = tv("", 13f, MUTED).also { it.gravity = Gravity.CENTER }
         root.addView(cityTv)
@@ -782,7 +784,7 @@ class MainActivity : Activity() {
         })
         root.addView(bat)
 
-        root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← الصلاة يا مسلم", 12f, MUTED).also {
+        root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← i.Muslim", 12f, MUTED).also {
             it.gravity = Gravity.CENTER; it.setPadding(0, dp(16), 0, 0)
         })
         animateEntrance(root)

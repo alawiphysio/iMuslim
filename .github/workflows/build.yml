@@ -27,16 +27,16 @@ jobs:
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk Salat-Ya-Muslim.apk
+        run: cp app/build/outputs/apk/release/app-release.apk iMuslim.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Salat-Ya-Muslim-apk
-          path: Salat-Ya-Muslim.apk
+          name: iMuslim-apk
+          path: iMuslim.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: الصلاة يا مسلم v1.0.${{ github.run_number }}
-          files: Salat-Ya-Muslim.apk
+          name: i.Muslim v1.0.${{ github.run_number }}
+          files: iMuslim.apk
