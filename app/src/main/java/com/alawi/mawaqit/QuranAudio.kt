@@ -87,7 +87,9 @@ object QuranPlayer {
                 }
             }
         }.start()
-        startPlayer(app, PRIMARY + pad(s) + ".mp3", s, fromAyah, fromMs)
+        val local = QuranDownloads.file(app, s)
+        if (local != null && QuranDownloads.isReady(app, s)) { usedBackup = true; startPlayer(app, local.absolutePath, s, fromAyah, fromMs) }
+        else startPlayer(app, PRIMARY + pad(s) + ".mp3", s, fromAyah, fromMs)
     }
 
     private fun startPlayer(app: Context, url: String, s: Int, fromAyah: Int, fromMs: Int) {
