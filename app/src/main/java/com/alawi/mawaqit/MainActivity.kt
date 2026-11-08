@@ -85,6 +85,28 @@ class MainActivity : Activity() {
         super.onResume()
         refresh()
         handler.post(ticker)
+        silentLocationCheck()
+    }
+
+    /** كل ما تفتح التطبيق: لو انتقلت لمدينة ثانية تتحدث الأوقات تلقائياً */
+    @SuppressLint("MissingPermission")
+    private fun silentLocationCheck() {
+        if (!AutoLocation.hasPermission(this)) return
+        val lm = getSystemService(LocationManager::class.java) ?: return
+        val provider = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+            .firstOrNull { try { lm.isProviderEnabled(it) } catch (e: Exception) { false } } ?: return
+        val handle = { loc: Location? ->
+            val changed = if (loc != null) AutoLocation.apply(this, loc) else AutoLocation.updateFromLastKnown(this)
+            if (changed) {
+                refresh(); reschedule()
+                handler.postDelayed({ refresh(); toast("تم تحديث الأوقات حسب موقعك: ${prefs.city}") }, 2500)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try { lm.getCurrentLocation(provider, null, mainExecutor) { loc -> handle(loc) } } catch (e: Exception) { handle(null) }
+        } else {
+            handle(null)
+        }
     }
 
     override fun onPause() {
@@ -325,6 +347,7 @@ class MainActivity : Activity() {
         val loc = card()
         loc.addView(header("الموقع وطريقة الحساب"))
         loc.addView(tv("طريقة الحساب: تقويم أم القرى (الفجر 18.5°، العشاء بعد المغرب بساعة ونص، وساعتين في رمضان)", 13f, MUTED))
+        loc.addView(tv("الموقع يتحدث تلقائياً: لو سافرت لمدينة ثانية تتغير الأوقات على حسب المنطقة.", 13f, MUTED))
         loc.addView(button("📍 تحديث موقعي") { fetchLocation() })
         loc.addView(button("🕋 استخدام مكة المكرمة", outline = true) {
             prefs.lat = 21.4225; prefs.lng = 39.8262; prefs.city = "مكة المكرمة"
