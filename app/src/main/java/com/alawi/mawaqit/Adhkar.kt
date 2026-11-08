@@ -219,7 +219,7 @@ class AdhkarReaderActivity : Activity() {
         val id = intent.getIntExtra("cat", Adhkar.MORNING_EVENING)
         val many = intent.getIntArrayExtra("cats")
         cat = if (many != null && many.isNotEmpty())
-            DhikrCategory(id, intent.getStringExtra("title") ?: "أذكار", many.mapNotNull { Adhkar.byId(this, it) }.flatMap { it.items })
+            DhikrCategory(id, intent.getStringExtra("title") ?: "أذكار", many.toList().mapNotNull { Adhkar.byId(this, it) }.flatMap { it.items })
         else Adhkar.byId(this, id) ?: Adhkar.all(this).first()
         val (frame, root) = Ui.screen(this)
         scroll = frame.findViewWithTag("scroll")
