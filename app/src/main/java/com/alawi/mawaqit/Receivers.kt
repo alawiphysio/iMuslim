@@ -25,16 +25,18 @@ class AlarmReceiver : BroadcastReceiver() {
         try {
             when (type) {
                 EvType.ADHAN -> if (p != null && prefs.adhanOn(p)) AdhanService.start(ctx, p, t)
-                EvType.PRE -> if (p != null) Notifier.reminder(
-                    ctx, 201,
-                    "باقي ${Fmt.num(prefs.preMin)} دقائق على أذان ${p.displayName(t)}",
-                    "الأذان الساعة ${Fmt.time(t + prefs.preMin * 60_000L)}"
-                )
-                EvType.IQAMA -> if (p != null) Notifier.reminder(
-                    ctx, 202,
-                    "حان وقت إقامة صلاة ${p.displayName(t)}",
-                    "أقيموا الصلاة 🤍"
-                )
+                EvType.PRE -> if (p != null) {
+                    val adhanT = t + prefs.preMin * 60_000L
+                    val title = "باقي ${Fmt.num(prefs.preMin)} دقائق على أذان ${p.displayName(adhanT)}"
+                    Notifier.reminder(ctx, 201, title, "الأذان الساعة ${Fmt.time(adhanT)} • توضأ واستعد 🤍")
+                    if (prefs.voiceOn) AdhanService.say(ctx, p, adhanT, title,
+                        Voice.before(prefs.userName, p, adhanT, prefs.preMin))
+                }
+                EvType.IQAMA -> if (p != null) {
+                    val title = "حان وقت إقامة صلاة ${p.displayName(t)}"
+                    Notifier.reminder(ctx, 202, title, "أقيموا الصلاة 🤍")
+                    if (prefs.voiceOn) AdhanService.say(ctx, p, t, title, Voice.iqama(prefs.userName, p, t))
+                }
                 EvType.REFRESH -> {}
             }
         } catch (e: Exception) {

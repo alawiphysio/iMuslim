@@ -60,6 +60,20 @@ class Prefs(ctx: Context) {
         get() = sp.getString("fajr_name", null)
         set(v) = sp.edit().putString("fajr_name", v).apply()
 
+    var muezzinId: String?
+        get() = sp.getString("muezzin_id", null)
+        set(v) = sp.edit().putString("muezzin_id", v).apply()
+
+    /** التذكير الصوتي (التطبيق يكلّمك) */
+    var voiceOn: Boolean
+        get() = sp.getBoolean("voice_on", true)
+        set(v) = sp.edit().putBoolean("voice_on", v).apply()
+
+    /** الاسم اللي يناديك فيه */
+    var userName: String
+        get() = sp.getString("user_name", "أحمد")!!
+        set(v) = sp.edit().putString("user_name", v).apply()
+
     var firstRun: Boolean
         get() = sp.getBoolean("first_run", true)
         set(v) = sp.edit().putBoolean("first_run", v).apply()
