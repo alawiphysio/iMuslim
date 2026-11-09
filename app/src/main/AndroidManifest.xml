@@ -109,7 +109,7 @@
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
-        <activity android:name=".UpdateActivity" android:exported="false" android:theme="@style/AppTheme" />
+        <activity android:name=".UpdateActivity" android:exported="false" android:launchMode="singleTop" android:theme="@style/AppTheme" />
 
         <receiver android:name=".AyahWidget" android:exported="true" android:label="@string/ayah_widget">
             <intent-filter>

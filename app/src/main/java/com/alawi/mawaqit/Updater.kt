@@ -233,7 +233,12 @@ object Updater {
                 f.inputStream().use { it.copyTo(out) }
                 session.fsync(out)
             }
-            val pi = PendingIntent.getBroadcast(ctx, if (auto) 703 else 702,
+            // من شاشة التحديث: النتيجة ترجع للشاشة نفسها (عشان أندرويد يسمح بفتح نافذة التأكيد)
+            val pi = if (!auto && ctx is UpdateActivity) PendingIntent.getActivity(ctx, 702,
+                Intent(ctx, UpdateActivity::class.java).setAction(UpdateActivity.ACTION_RESULT).putExtra("ver", ver)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            else PendingIntent.getBroadcast(ctx, if (auto) 703 else 702,
                 Intent(ctx, InstallResultReceiver::class.java).putExtra("auto", auto).putExtra("ver", ver),
                 PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             session.commit(pi.intentSender)
@@ -284,6 +289,30 @@ class UpdateDownloadReceiver : BroadcastReceiver() {
 
 /** شاشة التحديث: تتحقق، تحمّل مع نسبة، وتفتح التثبيت مباشرة */
 class UpdateActivity : Activity() {
+    companion object { const val ACTION_RESULT = "com.alawi.mawaqit.INSTALL_RESULT" }
+
+    /** نتيجة التثبيت ترجع هنا */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action != ACTION_RESULT) return
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (confirm != null) try { startActivity(confirm) } catch (e: Exception) {
+                    done("ما انفتحت نافذة التثبيت", e.message ?: "", "حاول مرة ثانية") { ready() }
+                }
+            }
+            PackageInstaller.STATUS_SUCCESS -> { title.text = "تم التحديث ✅"; sub.text = "" }
+            else -> {
+                val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
+                Diag.log(this, "فشل تثبيت التحديث: $status $msg")
+                done("ما تم التثبيت", if (status == PackageInstaller.STATUS_FAILURE_ABORTED) "انلغى التثبيت" else msg.take(120), "حاول مرة ثانية") { ready() }
+            }
+        }
+    }
+
     private val h = android.os.Handler(android.os.Looper.getMainLooper())
     private lateinit var title: TextView
     private lateinit var sub: TextView
