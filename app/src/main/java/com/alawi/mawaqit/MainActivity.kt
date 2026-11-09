@@ -103,6 +103,7 @@ class MainActivity : Activity() {
     private val rowBox = HashMap<Prayer, LinearLayout>()
     private var lastNextT = 0L
 
+    private var shownLook: Look.Mode? = null
     private val ticker = object : Runnable {
         override fun run() {
             tick()
@@ -177,6 +178,10 @@ class MainActivity : Activity() {
     }
 
     private fun refresh() {
+        // الوضع التلقائي: لما يجي الشروق أو المغرب نبدّل الألوان
+        val lk = Look.effective(this)
+        if (shownLook != null && shownLook != lk) { shownLook = lk; recreate(); return }
+        shownLook = lk
         val now = System.currentTimeMillis()
         val today = Times.forDay(this, 0, now)
         val (next, nextT) = Times.next(this, now)
@@ -751,6 +756,23 @@ class MainActivity : Activity() {
         stats.addView(tv("🟢 صليت  🟡 جماعة  ⚪ ما تأشّرت", 11f, MUTED).also { it.setPadding(0, dp(8), 0, 0) })
         root.addView(stats)
 
+        // المظهر
+        val lookCard = card()
+        lookCard.addView(header("🎨 المظهر"))
+        lookCard.addView(tv("تلقائي: نهاري من الشروق للمغرب، وليلي بعده", 12f, MUTED))
+        val lookRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0) }
+        val cur = Look.mode(this)
+        for (m in Look.Mode.values()) {
+            val sel = m == cur
+            lookRow.addView(tv("${m.emoji}\n${m.title}", 13f, if (sel) 0xFF0B231E.toInt() else TEXT, true).apply {
+                gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10))
+                background = if (sel) rounded(GOLD, 16f) else rounded(0x22FFFFFF, 16f, 0x44D9B44A)
+                setOnClickListener { Look.setMode(this@MainActivity, m); recreate() }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = dp(6) })
+        }
+        lookCard.addView(lookRow)
+        root.addView(lookCard)
+
         // التحديثات
         val up = card()
         up.addView(header("🔄 تحديث البرنامج"))
@@ -1208,7 +1230,7 @@ class MainActivity : Activity() {
 
     private fun card() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(0xCC0F2E27.toInt(), 22f, 0x33D9B44A)
+        background = rounded(Look.cardColor(this@MainActivity), 22f, 0x33D9B44A)
         setPadding(dp(16), dp(16), dp(16), dp(16))
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT

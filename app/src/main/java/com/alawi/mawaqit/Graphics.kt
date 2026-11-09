@@ -489,11 +489,21 @@ class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
     var parallax = 0f
         set(v) { field = v; invalidate() }
 
+    private var look = Look.Mode.NIGHT
+    /** نعيد رسم الخلفية لو تغيّر المظهر (مثلاً جا المغرب في الوضع التلقائي) */
+    fun reloadIfChanged() { if (Look.effective(context) != look && width > 0) onSizeChanged(width, height, width, height) }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        // صورة الموسم من Canva (لو موجودة)
+        look = Look.effective(context)
         bgBitmap = null
-        // صورة الموسم، وفي الأيام العادية: الحرم ليلاً (أو صورة مخصّصة للصفحة)
-        val res = if (photoRes >= 0) photoRes else Pictures.seasonBg(context, Season.current()).takeIf { it != 0 } ?: Pictures.splash(context)
+        // صورة الموسم، وفي الأيام العادية: الحرم ليلاً (نهاري: صورة الحرم وقت النهار، داكن: بدون صورة)
+        val res = when {
+            photoRes >= 0 -> photoRes
+            look == Look.Mode.DARK -> 0
+            else -> Pictures.seasonBg(context, Season.current()).takeIf { it != 0 }
+                ?: if (look == Look.Mode.DAY) Pictures.landmark(context, Landmarks.Type.HARAM).takeIf { it != 0 } ?: Pictures.splash(context)
+                   else Pictures.splash(context)
+        }
         if (res != 0 && w > 0 && h > 0) try {
             val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 }
             val b = android.graphics.BitmapFactory.decodeResource(resources, res, opts)
@@ -502,7 +512,9 @@ class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
                 val scale = maxOf(w / b.width.toFloat(), (h * 1.15f) / b.height.toFloat())
                 bgMatrix.setScale(scale, scale)
                 bgMatrix.postTranslate((w - b.width * scale) / 2f, 0f)
-                shade.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x66000000, 0xAA000000.toInt(), 0xDD000000.toInt()), null, Shader.TileMode.CLAMP)
+                shade.shader = if (look == Look.Mode.DAY)
+                    LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x10000000, 0x55000000, 0xAA06201B.toInt()), null, Shader.TileMode.CLAMP)
+                else LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x66000000, 0xAA000000.toInt(), 0xDD000000.toInt()), null, Shader.TileMode.CLAMP)
             }
         } catch (e: OutOfMemoryError) { bgBitmap = null }
         stars.clear()
@@ -514,7 +526,12 @@ class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
         }
         val season = Season.current()
         festive = season.festive
-        bgPaint.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), season.skyTop, season.skyBottom, Shader.TileMode.CLAMP)
+        bgPaint.shader = when (look) {
+            Look.Mode.DARK -> LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF000000.toInt(), 0xFF06100D.toInt(), Shader.TileMode.CLAMP)
+            Look.Mode.DAY -> LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF3C88B2.toInt(), 0xFFE7C98E.toInt(), Shader.TileMode.CLAMP)
+            else -> LinearGradient(0f, 0f, 0f, h.toFloat(), season.skyTop, season.skyBottom, Shader.TileMode.CLAMP)
+        }
+        invalidate()
     }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); anim.start() }
@@ -531,6 +548,17 @@ class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
             c.restore()
             c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shade)
         }
+        if (look == Look.Mode.DAY) {
+            // شمس ناعمة بدل النجوم
+            val d = resources.displayMetrics.density
+            val cx = width * 0.82f; val cy = height * 0.08f
+            val pulse = 1f + 0.06f * sin(t * 0.6f)
+            paint.shader = android.graphics.RadialGradient(cx, cy, 120f * d * pulse,
+                intArrayOf(0x88FFF3C4.toInt(), 0x33FFE7A0, 0x00FFE7A0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(cx, cy, 120f * d * pulse, paint); paint.shader = null
+            return
+        }
+        val starAlpha = if (look == Look.Mode.DARK) 0.45f else 1f
         for ((i, s) in stars.withIndex()) {
             val a = 0.25f + 0.75f * ((sin(t * s.speed + s.phase) + 1f) / 2f)
             if (festive) {
@@ -539,7 +567,7 @@ class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
                 paint.color = Color.argb((a * 230).toInt(), Color.red(col), Color.green(col), Color.blue(col))
                 c.drawCircle(s.x, s.y, s.r * 1.4f, paint)
             } else {
-                paint.color = Color.argb((a * 220).toInt(), 255, 245, 215)
+                paint.color = Color.argb((a * 220 * starAlpha).toInt(), 255, 245, 215)
                 c.drawCircle(s.x, s.y, s.r, paint)
             }
         }
