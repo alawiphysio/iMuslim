@@ -501,7 +501,7 @@ class MainActivity : Activity() {
             clipToOutline = true
             background = rounded(0x22000000, 24f)
         }
-        nextCard.addView(figureIv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(200)).also { it.bottomMargin = dp(10) })
+        nextCard.addView(figureIv, LinearLayout.LayoutParams(dp(270), dp(270)).also { it.bottomMargin = dp(10); it.gravity = Gravity.CENTER_HORIZONTAL })
         nextLabelTv = tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextLabelTv)
         nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }
