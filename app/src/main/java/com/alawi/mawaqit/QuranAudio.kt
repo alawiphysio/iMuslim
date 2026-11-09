@@ -66,10 +66,51 @@ object QuranPlayer {
 
     fun startOfAyah(a: Int): Int? = timings?.firstOrNull { it.ayah == a }?.start
 
+    /** وضع «آية وحدة»: يقرأ الآية بصوت الشيخ ويوقف بعدها (ما يغيّر «وين وقفت») */
+    var singleSurah = 0
+        private set
+    var singleAyah = 0
+        private set
+    fun isSingle(s: Int, a: Int) = singleAyah == a && singleSurah == s && (playing || preparing)
+
+    fun playAyah(ctx: Context, s: Int, a: Int) {
+        val app = ctx.applicationContext
+        stopInternal()
+        singleSurah = s; singleAyah = a
+        preparing = true; notifyUi()
+        val cached = timingCache[s]
+        if (cached != null) { play(app, s, a); singleSurah = s; singleAyah = a; watchSingle(app); return }
+        Thread {
+            val t = fetchTimings(s)
+            handler.post {
+                if (singleAyah != a || singleSurah != s) return@post
+                if (t != null) timingCache[s] = t
+                play(app, s, a); singleSurah = s; singleAyah = a
+                watchSingle(app)
+            }
+        }.start()
+    }
+
+    private val SINGLE = Any()
+    private fun watchSingle(app: Context) {
+        handler.removeCallbacksAndMessages(SINGLE)
+        handler.postAtTime({
+            if (singleAyah > 0) {
+                val end = timings?.firstOrNull { it.ayah == singleAyah }?.end
+                if (!preparing && !playing && mp == null) { singleAyah = 0; return@postAtTime }
+                if (end != null && end > 0 && playing && positionMs() >= end - 60) {
+                    singleAyah = 0; singleSurah = 0
+                    stopInternal(); QuranAudioService.stop(app); notifyUi()
+                } else watchSingle(app)
+            }
+        }, SINGLE, android.os.SystemClock.uptimeMillis() + 120)
+    }
+
     /** يبدأ سورة؛ لو fromAyah > 1 يقفز لها بعد ما يجهز التوقيت */
     fun play(ctx: Context, s: Int, fromAyah: Int = 1, fromMs: Int = -1) {
         val app = ctx.applicationContext
         stopInternal()
+        singleAyah = 0; singleSurah = 0
         surah = s
         preparing = true
         usedBackup = false
@@ -117,8 +158,11 @@ object QuranPlayer {
             }
             p.setOnCompletionListener {
                 playing = false
-                QuranPrefs.setListen(app, s, 0)
-                if (autoNext && s < 114) play(app, s + 1) else { QuranAudioService.stop(app); notifyUi() }
+                if (singleAyah > 0) { singleAyah = 0; singleSurah = 0; QuranAudioService.stop(app); notifyUi() }
+                else {
+                    QuranPrefs.setListen(app, s, 0)
+                    if (autoNext && s < 114) play(app, s + 1) else { QuranAudioService.stop(app); notifyUi() }
+                }
             }
             p.setOnErrorListener { _, _, _ ->
                 if (!usedBackup) {
@@ -144,7 +188,7 @@ object QuranPlayer {
         handler.removeCallbacksAndMessages(TICK)
         handler.postAtTime({
             if (playing) {
-                QuranPrefs.setListen(app, surah, positionMs())
+                if (singleAyah == 0) QuranPrefs.setListen(app, surah, positionMs())
                 notifyUi()
                 tick(app)
             }
@@ -163,7 +207,8 @@ object QuranPlayer {
     fun seek(ms: Int) { try { mp?.seekTo(ms) } catch (e: Exception) { } }
 
     fun stop(ctx: Context) {
-        if (surah > 0 && mp != null) QuranPrefs.setListen(ctx, surah, positionMs())
+        if (surah > 0 && mp != null && singleAyah == 0) QuranPrefs.setListen(ctx, surah, positionMs())
+        singleAyah = 0; singleSurah = 0
         stopInternal()
         QuranAudioService.stop(ctx.applicationContext)
         notifyUi()

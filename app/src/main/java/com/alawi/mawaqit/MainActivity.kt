@@ -665,6 +665,21 @@ class MainActivity : Activity() {
             it.setLineSpacing(0f, 1.4f)
         })
         ayahCard.addView(tv("سورة ${aSu.name} • آية ${Fmt.num(aA)}", 12f, MUTED).also { it.gravity = Gravity.CENTER })
+        // ▶ استماع للآية بصوت الشيخ عبدالله علي جابر
+        lateinit var listenBtn: TextView
+        val syncListen = object : Runnable {
+            override fun run() {
+                val on = QuranPlayer.isSingle(aS, aA)
+                listenBtn.text = if (on) "⏹ إيقاف التلاوة" else "▶ استمع للآية بصوت ${QuranPlayer.RECITER}"
+                if (on) handler.postDelayed(this, 400)
+            }
+        }
+        listenBtn = button("▶ استمع للآية بصوت ${QuranPlayer.RECITER}") {
+            if (QuranPlayer.isSingle(aS, aA)) QuranPlayer.stop(this)
+            else { QuranPlayer.playAyah(this, aS, aA); listenBtn.text = "⏳ جاري التحميل…" }
+            handler.removeCallbacks(syncListen); handler.postDelayed(syncListen, 300)
+        }
+        ayahCard.addView(listenBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(8); it.bottomMargin = dp(8) })
         val aRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         aRow.addView(button("📘 التفسير") {
             val t = Tafsir.of(this, aS, aA).replace("[التفسير]", "\n📘 التفسير:")
