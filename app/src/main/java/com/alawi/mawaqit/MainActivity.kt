@@ -710,6 +710,16 @@ class MainActivity : Activity() {
         stats.addView(tv("🟢 صليت  🟡 جماعة  ⚪ ما تأشّرت", 11f, MUTED).also { it.setPadding(0, dp(8), 0, 0) })
         root.addView(stats)
 
+        // التحديثات
+        val up = card()
+        up.addView(header("🔄 تحديث البرنامج"))
+        up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق كل ساعة، ويحمّل التحديث ويثبّته لحاله.", 13f, MUTED))
+        up.addView(button("🔄 تحديث البرنامج") {
+            if (Updater.readyVersion(this) > 0) startActivity(Intent(this, UpdateActivity::class.java))
+            else { toast("جاري التحقق…"); Updater.checkInBackground(this, true) { toast(it) } }
+        })
+        root.addView(up)
+
         // بطاقة التنبيهات
         val alerts = card()
         alerts.addView(header("الأذان لكل صلاة"))
@@ -832,15 +842,6 @@ class MainActivity : Activity() {
         occ.addView(switch("🌌 قيام الليل (الثلث الأخير)", prefs.qiyamOn) { prefs.qiyamOn = it; reschedule() })
         root.addView(occ)
 
-        // التحديثات
-        val up = card()
-        up.addView(header("🔄 التحديثات"))
-        up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق كل ساعة، ويحمّل التحديث ويثبّته لحاله.", 13f, MUTED))
-        up.addView(button("التحقق من التحديث الحين") {
-            if (Updater.readyVersion(this) > 0) startActivity(Intent(this, UpdateActivity::class.java))
-            else { toast("جاري التحقق…"); Updater.checkInBackground(this, true) { toast(it) } }
-        })
-        root.addView(up)
 
         // النسخ الاحتياطي والساعة
         val bk = card()

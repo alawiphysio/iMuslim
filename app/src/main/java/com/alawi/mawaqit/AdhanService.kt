@@ -172,7 +172,14 @@ class AdhanService : Service() {
         // الفجر له أذانه الخاص، ولو ما اخترت له ملف يستخدم الأذان العادي
         val chosen = if (p == Prayer.FAJR) (prefs.fajrUri ?: prefs.adhanUri) else prefs.adhanUri
         val custom = chosen?.let { Uri.parse(it) }
-        val ok = custom != null && tryPlay(custom, false)
+        var ok = custom != null && tryPlay(custom, false)
+        if (!ok) {
+            // الأذان المدمج في التطبيق (الحرم المكي)
+            val name = if (p == Prayer.FAJR) "fajr_makkah" else "adhan_makkah"
+            if (resources.getIdentifier(name, "raw", packageName) != 0)
+                ok = tryPlay(Uri.parse("android.resource://$packageName/raw/$name"), false)
+            if (ok) Diag.log(this, "شغّلت الأذان المدمج") else Diag.log(this, "تعذّر تشغيل ملف الأذان ❌")
+        } else Diag.log(this, "الأذان يشتغل 🔊")
         if (!ok) {
             val def = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)

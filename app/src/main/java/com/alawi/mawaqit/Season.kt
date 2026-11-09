@@ -10,6 +10,7 @@ class App : Application() {
         super.onCreate()
         Hijri.adjustDays = Prefs(this).hijriAdjust
         Sadaqa.register(this)
+        try { Muezzins.ensureDefault(this) } catch (e: Exception) { }
     }
 }
 

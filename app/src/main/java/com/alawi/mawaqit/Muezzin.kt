@@ -13,25 +13,35 @@ data class Muezzin(val id: String, val name: String, val place: String)
 
 object Muezzins {
     val ALL = listOf(
-        Muezzin("ali_mulla", "الشيخ علي ملا", "المسجد الحرام"),
-        Muezzin("sraihi", "الشيخ عبدالمجيد السريحي", "المسجد الحرام"),
-        Muezzin("essam_bukhari", "الشيخ عصام بخاري", "المسجد النبوي"),
-        Muezzin("afasy", "الشيخ مشاري العفاسي", "الكويت"),
-        Muezzin("refaat", "الشيخ محمد رفعت", "مصر")
+        Muezzin("makkah", "أذان الحرم المكي", "المسجد الحرام"),
+        Muezzin("madinah", "أذان الحرم النبوي", "المسجد النبوي")
     )
+    const val DEFAULT = "makkah"
 
     private fun raw(ctx: Context, name: String): Int =
         ctx.resources.getIdentifier(name, "raw", ctx.packageName)
 
     fun isAvailable(ctx: Context, m: Muezzin) = raw(ctx, "adhan_${m.id}") != 0
 
-    fun adhanUri(ctx: Context, m: Muezzin): String? =
-        raw(ctx, "adhan_${m.id}").takeIf { it != 0 }?.let { "android.resource://${ctx.packageName}/$it" }
+    // بالاسم (مو بالرقم) عشان يبقى صالح بعد كل تحديث
+    private fun uri(ctx: Context, name: String) = "android.resource://${ctx.packageName}/raw/$name"
 
-    /** أذان الفجر الخاص بالشيخ، ولو مو موجود يرجع الأذان العادي */
+    fun adhanUri(ctx: Context, m: Muezzin): String? =
+        raw(ctx, "adhan_${m.id}").takeIf { it != 0 }?.let { uri(ctx, "adhan_${m.id}") }
+
+    /** أذان الفجر (فيه «الصلاة خير من النوم»): الخاص بالشيخ، وإلا أذان فجر الحرم */
     fun fajrUri(ctx: Context, m: Muezzin): String? =
-        raw(ctx, "fajr_${m.id}").takeIf { it != 0 }?.let { "android.resource://${ctx.packageName}/$it" }
+        raw(ctx, "fajr_${m.id}").takeIf { it != 0 }?.let { uri(ctx, "fajr_${m.id}") }
+            ?: raw(ctx, "fajr_makkah").takeIf { it != 0 }?.let { uri(ctx, "fajr_makkah") }
             ?: adhanUri(ctx, m)
+
+    /** أول تشغيل أو اختيار قديم تالف: نختار أذان الحرم */
+    fun ensureDefault(ctx: Context) {
+        val prefs = Prefs(ctx)
+        val a = prefs.adhanUri
+        val broken = a == null || (a.startsWith("android.resource://") && !a.contains("/raw/"))
+        if (broken) ALL.firstOrNull { it.id == (prefs.muezzinId.takeIf { id -> ALL.any { it.id == id } } ?: DEFAULT) }?.let { select(ctx, it) }
+    }
 
     fun select(ctx: Context, m: Muezzin): Boolean {
         val a = adhanUri(ctx, m) ?: return false
@@ -39,7 +49,7 @@ object Muezzins {
         prefs.adhanUri = a
         prefs.adhanName = "${m.name} • ${m.place}"
         prefs.fajrUri = fajrUri(ctx, m)
-        prefs.fajrName = if (raw(ctx, "fajr_${m.id}") != 0) "${m.name} • أذان الفجر" else "${m.name} (نفس الأذان العادي)"
+        prefs.fajrName = if (raw(ctx, "fajr_${m.id}") != 0) "${m.name} • أذان الفجر" else "أذان الفجر من الحرم المكي"
         prefs.muezzinId = m.id
         return true
     }

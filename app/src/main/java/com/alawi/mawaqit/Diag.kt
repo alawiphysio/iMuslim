@@ -52,6 +52,11 @@ object Diag {
         if (Build.VERSION.SDK_INT >= 31 && am != null && !am.canScheduleExactAlarms())
             out.add(Issue("المنبهات الدقيقة غير مسموحة") { a -> try {
                 a.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$pkg"))) } catch (e: Exception) { appSettings(a) } })
+        val au = ctx.getSystemService(android.media.AudioManager::class.java)
+        if (au != null && au.getStreamVolume(android.media.AudioManager.STREAM_ALARM) == 0)
+            out.add(Issue("صوت المنبه صفر — الأذان ما راح ينسمع") { _ ->
+                au.setStreamVolume(android.media.AudioManager.STREAM_ALARM,
+                    (au.getStreamMaxVolume(android.media.AudioManager.STREAM_ALARM) * 0.7f).toInt().coerceAtLeast(1), android.media.AudioManager.FLAG_SHOW_UI) })
         val pm = ctx.getSystemService(PowerManager::class.java)
         if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg))
             out.add(Issue("توفير البطارية ممكن يوقف الأذان") { a -> try {
