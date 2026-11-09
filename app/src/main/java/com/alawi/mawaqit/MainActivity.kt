@@ -113,6 +113,7 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
         Notifier.ensureChannels(this)
         setContentView(buildUi())
+        window.decorView.postDelayed({ if (!isFinishing) Sadaqa.askNameOnce(this) }, 3500)
 
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -884,7 +885,7 @@ class MainActivity : Activity() {
         voice.addView(header("🗣 التطبيق يكلّمك"))
         voice.addView(tv("يذكّرك بصوت عربي قبل الأذان، ويقول لك وقت الأذان، وينبهك وقت الإقامة.", 13f, MUTED))
         voice.addView(switch("التذكير الصوتي", prefs.voiceOn) { prefs.voiceOn = it })
-        voice.addView(textField("يناديك باسم", prefs.userName) { if (it.isNotBlank()) prefs.userName = it.trim() })
+        voice.addView(textField("اسمك (التطبيق يناديك فيه)", prefs.userName) { if (it.isNotBlank()) prefs.userName = it.trim() })
         val vRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         vRow.addView(button("▶ اسمع التذكير") {
             val (np, nt) = Times.next(this)
