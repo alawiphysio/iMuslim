@@ -11,16 +11,24 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           sudo apt-get -qq update >/dev/null && sudo apt-get -qq install -y ffmpeg >/dev/null
-          mkdir -p cand
-          for r in rehanhaider/adhan AalianKhan/adhans abodehq/Athan-MP3 mubaid/adhan kamranzafar/piprayer; do
-            d=$(echo $r | tr / _); git clone -q --depth 1 https://github.com/$r /tmp/$d || continue
-            find /tmp/$d -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.m4a' \) | while read f; do
-              n="${d}__$(basename "$f" | tr ' ' '_')"
-              dur=$(ffprobe </dev/null -v error -show_entries format=duration -of csv=p=0 "$f")
-              echo "$n $(stat -c%s "$f") ${dur}s" | tee -a cand/list.txt
-              # نحفظ نسخة مضغوطة صغيرة للاستماع/التحليل
-              ffmpeg -nostdin -v error -y -i "$f" -ac 1 -c:a libopus -b:a 32k "cand/$n.ogg"
-            done
-          done
+          pip -q install faster-whisper
+          git clone -q --depth 1 https://github.com/rehanhaider/adhan /tmp/r
+          git clone -q --depth 1 https://github.com/abodehq/Athan-MP3 /tmp/a
+          mkdir -p out
+          enc() { ffmpeg -nostdin -v error -y -i "$1" -vn -ac 1 -ar 48000 -af "loudnorm=I=-14:TP=-1" -c:a libopus -b:a 48k "out/$2.ogg"; }
+          enc /tmp/r/media/Adhan-Makkah1.mp3 adhan_makkah
+          enc /tmp/r/media/Adhan-fajr.mp3 fajr_makkah
+          enc /tmp/r/media/Adhan-Madinah.mp3 adhan_madinah
+          enc "/tmp/a/Athan_Mansoor_Az-Zahrani.mp3" adhan_zahrani
+          python - <<'PY' | tee out/check.txt
+          from faster_whisper import WhisperModel
+          import glob
+          m = WhisperModel("small", compute_type="int8")
+          for f in sorted(glob.glob("out/*.ogg")):
+              segs, info = m.transcribe(f, language="ar", beam_size=1)
+              txt = " ".join(s.text for s in segs)
+              print(f, "|", txt[:600])
+          PY
+          ls -la out
           git config user.name alawiphysio; git config user.email alawiphysio@users.noreply.github.com
-          git add cand && git commit -qm "cand [skip ci]" && git push
+          git add out && git commit -qm "audio [skip ci]" && git push
