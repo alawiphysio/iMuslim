@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          pip -q install faster-whisper "av<14"
+          pip -q install faster-whisper
           python chk.py | tee check.txt
           git config user.name alawiphysio; git config user.email alawiphysio@users.noreply.github.com
           git add check.txt && git commit -qm "check [skip ci]" && git push
