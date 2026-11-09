@@ -127,6 +127,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        minutesBigTv.animate().cancel(); minutesBigTv.alpha = 1f; minutesBigTv.translationY = 0f
         refresh()
         handler.post(ticker)
         silentLocationCheck()
@@ -179,7 +180,11 @@ class MainActivity : Activity() {
         val stName = st.prayer.displayName(st.adhanT)
         if (lastIqamaPhase != st.iqamaPhase) {
             lastIqamaPhase = st.iqamaPhase
-            figureIv.setImageResource(Pictures.figure(this, st.iqamaPhase))
+            val figRes = Pictures.figure(this, st.iqamaPhase)
+            figureIv.setImageResource(figRes)
+            // الرسمة المرسومة بالكود تنعرض كاملة، وصور Canva تملأ الإطار
+            figureIv.scaleType = if (figRes == R.drawable.fig_walker || figRes == R.drawable.fig_praying)
+                ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
             figureIv.alpha = 0f; figureIv.scaleX = 0.8f; figureIv.scaleY = 0.8f
             figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
                 .setInterpolator(DecelerateInterpolator(2f)).start()
@@ -302,14 +307,17 @@ class MainActivity : Activity() {
         val mins = ((lastNextT - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
         val newText = Fmt.num(mins)
         if (minutesBigTv.text.toString() != newText) {
-            if (minutesBigTv.text.isNullOrEmpty()) minutesBigTv.text = newText
-            else {
+            minutesBigTv.animate().cancel()
+            if (minutesBigTv.text.isNullOrEmpty() || !minutesBigTv.isShown) {
+                minutesBigTv.text = newText; minutesBigTv.alpha = 1f; minutesBigTv.translationY = 0f
+            } else {
                 // الرقم القديم يطلع لفوق ويختفي، والجديد ينزل مكانه
                 minutesBigTv.animate().translationY(-dp(18).toFloat()).alpha(0f).setDuration(180).withEndAction {
                     minutesBigTv.text = newText
                     minutesBigTv.translationY = dp(18).toFloat()
                     minutesBigTv.animate().translationY(0f).alpha(1f).setDuration(260)
-                        .setInterpolator(DecelerateInterpolator(1.6f)).start()
+                        .setInterpolator(DecelerateInterpolator(1.6f))
+                        .withEndAction { minutesBigTv.alpha = 1f; minutesBigTv.translationY = 0f }.start()
                 }.start()
             }
         }
@@ -502,7 +510,7 @@ class MainActivity : Activity() {
         ringBox.addView(ringView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val inner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-        minutesBigTv = tv("", 62f, TEXT, true).also {
+        minutesBigTv = tv("", 62f, 0xFFFFFFFF.toInt(), true).also {
             it.gravity = Gravity.CENTER
             it.setShadowLayer(dp(12).toFloat(), 0f, 0f, 0x66F6DE8D)
         }
