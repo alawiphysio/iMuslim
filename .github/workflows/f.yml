@@ -10,6 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          sudo apt-get -qq update >/dev/null && sudo apt-get -qq install -y ffmpeg >/dev/null
           pip -q install faster-whisper
           python chk.py | tee check.txt
           git config user.name alawiphysio; git config user.email alawiphysio@users.noreply.github.com
