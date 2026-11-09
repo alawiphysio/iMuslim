@@ -220,6 +220,7 @@ object Updater {
 
     fun notifyReadyPublic(ctx: Context, ver: Long) = notifyReady(ctx, ver)
 
+    @Volatile var lastSid = -1
     private fun commit(ctx: Context, ver: Long, auto: Boolean): Boolean {
         val f = apkFile(ctx, ver) ?: return false
         if (!f.exists()) return false
@@ -227,7 +228,10 @@ object Updater {
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(ctx.packageName)
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        // نلغي أي جلسة تثبيت قديمة معلّقة (كانت تسبب «انلغى التثبيت»)
+        for (old in pkg.mySessions) try { pkg.abandonSession(old.sessionId) } catch (e: Exception) { }
         val sid = pkg.createSession(params)
+        lastSid = sid
         pkg.openSession(sid).use { session ->
             session.openWrite("iMuslim.apk", 0, f.length()).use { out ->
                 f.inputStream().use { it.copyTo(out) }
@@ -235,11 +239,11 @@ object Updater {
             }
             // من شاشة التحديث: النتيجة ترجع للشاشة نفسها (عشان أندرويد يسمح بفتح نافذة التأكيد)
             val pi = if (!auto && ctx is UpdateActivity) PendingIntent.getActivity(ctx, 702,
-                Intent(ctx, UpdateActivity::class.java).setAction(UpdateActivity.ACTION_RESULT).putExtra("ver", ver)
+                Intent(ctx, UpdateActivity::class.java).setAction(UpdateActivity.ACTION_RESULT).putExtra("ver", ver).putExtra("sid", sid)
                     .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             else PendingIntent.getBroadcast(ctx, if (auto) 703 else 702,
-                Intent(ctx, InstallResultReceiver::class.java).putExtra("auto", auto).putExtra("ver", ver),
+                Intent(ctx, InstallResultReceiver::class.java).putExtra("auto", auto).putExtra("ver", ver).putExtra("sid", sid),
                 PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             session.commit(pi.intentSender)
         }
@@ -295,6 +299,8 @@ class UpdateActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action != ACTION_RESULT) return
+        // نتيجة جلسة قديمة؟ نتجاهلها
+        if (intent.getIntExtra("sid", -1) != Updater.lastSid) return
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
@@ -305,6 +311,13 @@ class UpdateActivity : Activity() {
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> { title.text = "تم التحديث ✅"; sub.text = "" }
+            PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                // سكّرت نافذة التأكيد: نرجّع زر التثبيت بهدوء
+                installing = false
+                title.text = "التحديث جاهز 🎁"; sub.text = "اضغط «ثبّت» ثم «تحديث» في النافذة"
+                btn.visibility = android.view.View.VISIBLE; btn.text = "ثبّت التحديث الحين"
+                btn.setOnClickListener { doInstall() }
+            }
             else -> {
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
                 Diag.log(this, "فشل تثبيت التحديث: $status $msg")
@@ -395,8 +408,20 @@ class UpdateActivity : Activity() {
         title.text = "التحديث جاهز 🎁"
         sub.text = "من ${Updater.currentName(this)} إلى 1.0.$ver"
         btn.text = "ثبّت التحديث الحين"; btn.visibility = android.view.View.VISIBLE
-        btn.setOnClickListener { Updater.install(this, ver) }
-        Updater.install(this, ver)   // يفتح نافذة التثبيت مباشرة
+        btn.setOnClickListener { doInstall() }
+        if (!autoTried) { autoTried = true; doInstall() }   // يفتح نافذة التثبيت مباشرة (مرة وحدة)
+    }
+
+    private var installing = false
+    private var autoTried = false
+    private fun doInstall() {
+        if (installing) return
+        installing = true
+        sub.text = "جاري فتح نافذة التثبيت…"
+        h.post {
+            val ok = try { Updater.install(this, ver) } catch (e: Exception) { false }
+            if (!ok) installing = false else h.postDelayed({ installing = false }, 4000)
+        }
     }
 
     private fun done(t: String, s: String, b: String?, act: (() -> Unit)?) {
