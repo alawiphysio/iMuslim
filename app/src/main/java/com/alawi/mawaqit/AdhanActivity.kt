@@ -125,4 +125,25 @@ class AdhanActivity : Activity() {
         colorAnim?.cancel()
         super.onDestroy()
     }
+
+    /** أزرار الصوت توقف الأذان */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            AdhanService.stop(this); finish(); return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private val doneRx = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context, i: android.content.Intent) { finish() }
+    }
+    override fun onStart() {
+        super.onStart()
+        val f = android.content.IntentFilter(AdhanService.ACTION_DONE)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(doneRx, f, android.content.Context.RECEIVER_NOT_EXPORTED) else registerReceiver(doneRx, f)
+    }
+    override fun onStop() {
+        try { unregisterReceiver(doneRx) } catch (e: Exception) { }
+        super.onStop()
+    }
 }

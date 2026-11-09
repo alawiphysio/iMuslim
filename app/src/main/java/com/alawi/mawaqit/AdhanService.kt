@@ -31,6 +31,49 @@ class AdhanService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val stopper = Runnable { stopSelf() }
 
+    // ---- إيقاف الأذان من برّا: أزرار الصوت، زر التشغيل، أو سحب الإشعار ----
+    private var session: android.media.session.MediaSession? = null
+    private var screenRx: android.content.BroadcastReceiver? = null
+    private var hwSince = 0L
+
+    private fun enableHardwareStop() {
+        disableHardwareStop()
+        hwSince = System.currentTimeMillis()
+        try {
+            val s = android.media.session.MediaSession(this, "iMuslimAdhan")
+            s.setPlaybackToRemote(object : android.media.VolumeProvider(VOLUME_CONTROL_RELATIVE, 10, 5) {
+                override fun onAdjustVolume(direction: Int) { Diag.log(this@AdhanService, "أوقفت الأذان بزر الصوت"); stopSelf() }
+            })
+            s.setCallback(object : android.media.session.MediaSession.Callback() {
+                override fun onMediaButtonEvent(i: Intent): Boolean { stopSelf(); return true }
+                override fun onPause() { stopSelf() }
+                override fun onStop() { stopSelf() }
+            })
+            s.setPlaybackState(android.media.session.PlaybackState.Builder()
+                .setActions(android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_STOP)
+                .setState(android.media.session.PlaybackState.STATE_PLAYING, 0, 1f).build())
+            s.isActive = true
+            session = s
+        } catch (e: Exception) { }
+        // زر التشغيل (قفل/فتح الشاشة) يوقف الأذان
+        screenRx = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (System.currentTimeMillis() - hwSince < 3000) return   // نتجاهل إضاءة الشاشة لحظة بداية الأذان
+                Diag.log(c, "أوقفت الأذان بزر التشغيل")
+                stopSelf()
+            }
+        }
+        val f = android.content.IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenRx, f, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenRx, f)
+    }
+
+    private fun disableHardwareStop() {
+        try { session?.isActive = false; session?.release() } catch (e: Exception) { }
+        session = null
+        try { screenRx?.let { unregisterReceiver(it) } } catch (e: Exception) { }
+        screenRx = null
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -64,7 +107,10 @@ class AdhanService : Service() {
             startForeground(NOTIF_ID, n)
         }
 
-        if (mode == MODE_ADHAN) Diag.log(this, "خدمة الأذان اشتغلت${if (test) " (تجربة)" else ""}")
+        if (mode == MODE_ADHAN) {
+            Diag.log(this, "خدمة الأذان اشتغلت${if (test) " (تجربة)" else ""}")
+            enableHardwareStop()
+        }
         release()
         when (mode) {
             MODE_SPEAK -> {
@@ -112,7 +158,7 @@ class AdhanService : Service() {
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, android.R.drawable.ic_media_pause),
-                    "إيقاف", stopPi
+                    "⏹ إيقاف الأذان", stopPi
                 ).build()
             )
             .build()
@@ -231,6 +277,8 @@ class AdhanService : Service() {
     }
 
     override fun onDestroy() {
+        disableHardwareStop()
+        sendBroadcast(Intent(ACTION_DONE).setPackage(packageName))
         Effects.stopFlash(this)
         Effects.restoreDnd(this)
         release()
@@ -240,6 +288,7 @@ class AdhanService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.alawi.mawaqit.STOP_ADHAN"
+        const val ACTION_DONE = "com.alawi.mawaqit.ADHAN_DONE"
         const val EXTRA_TEST = "test"
         const val EXTRA_MODE = "mode"
         const val EXTRA_SPEECH = "speech"
