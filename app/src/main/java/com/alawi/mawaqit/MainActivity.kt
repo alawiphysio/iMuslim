@@ -411,6 +411,8 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             REQ_NOTIF -> if (prefs.firstRun) fetchLocation()
+            REQ_AUDIO_PERM -> if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) showDeviceAudio(pendingAudioReq)
+            else { toast("بدون الإذن نفتح لك الملفات"); openPicker(pendingAudioReq) }
             REQ_LOC -> if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) fetchLocation()
             else { prefs.firstRun = false; toast("بنستخدم أوقات مكة المكرمة") }
         }
@@ -428,16 +430,26 @@ class MainActivity : Activity() {
             return
         }
         if ((requestCode == REQ_SOUND || requestCode == REQ_SOUND_FAJR) && resultCode == RESULT_OK) {
-            val uri = data?.data ?: return
-            try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) { }
+            val src = data?.data ?: return
             var name: String? = null
             try {
-                contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                contentResolver.query(src, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) name = it.getString(0)
                 }
             } catch (e: Exception) { }
+            setSound(requestCode, src, name)
+        }
+    }
+
+    /** ننسخ الصوت داخل التطبيق: يشتغل حتى بدون نت (حتى لو كان من Drive) وما يضيع */
+    private fun setSound(requestCode: Int, src: Uri, name: String?) {
+        run {
+            val f = java.io.File(filesDir, if (requestCode == REQ_SOUND_FAJR) "sound_fajr" else "sound_adhan")
+            val ok = try {
+                contentResolver.openInputStream(src)?.use { inp -> f.outputStream().use { inp.copyTo(it) } } != null && f.length() > 1000
+            } catch (e: Exception) { false }
+            if (!ok) { toast("ما قدرت أقرأ الملف، جرّب ملف ثاني"); return }
+            val uri = Uri.fromFile(f)
             prefs.muezzinId = null
             if (requestCode == REQ_SOUND_FAJR) {
                 prefs.fajrUri = uri.toString()
@@ -451,6 +463,35 @@ class MainActivity : Activity() {
             refresh()
         }
     }
+
+    /** قائمة الأصوات اللي في جوالك، داخل التطبيق (بدون ما تطلع لتطبيق ثاني) */
+    private fun showDeviceAudio(req: Int) {
+        val perm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+        if (checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED) {
+            pendingAudioReq = req
+            requestPermissions(arrayOf(perm), REQ_AUDIO_PERM); return
+        }
+        val items = ArrayList<Pair<String, Uri>>()
+        try {
+            contentResolver.query(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(android.provider.MediaStore.Audio.Media._ID, android.provider.MediaStore.Audio.Media.TITLE, android.provider.MediaStore.Audio.Media.DURATION),
+                "${android.provider.MediaStore.Audio.Media.DURATION} > 20000", null,
+                "${android.provider.MediaStore.Audio.Media.DATE_ADDED} DESC")?.use { c ->
+                while (c.moveToNext() && items.size < 300) {
+                    val id = c.getLong(0); val dur = c.getLong(2) / 1000
+                    items.add("${c.getString(1)}  (${dur / 60}:${"%02d".format(dur % 60)})" to
+                        android.content.ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id))
+                }
+            }
+        } catch (e: Exception) { }
+        if (items.isEmpty()) { toast("ما لقيت ملفات صوت في جوالك. نزّل ملف الأذان أول، أو اختر من الملفات"); return }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(if (req == REQ_SOUND_FAJR) "اختر أذان الفجر" else "اختر صوت الأذان")
+            .setItems(items.map { it.first }.toTypedArray()) { _, w -> setSound(req, items[w].second, items[w].first.substringBefore("  (")) }
+            .setNegativeButton("إلغاء", null).show()
+    }
+
+    private var pendingAudioReq = 0
 
     // ---------------- الواجهة ----------------
 
@@ -1080,6 +1121,17 @@ class MainActivity : Activity() {
     }
 
     private fun pickSound(req: Int) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("من وين تختار الصوت؟")
+            .setItems(arrayOf("🎵 من الأصوات اللي في جوالك (داخل التطبيق)", "📁 من الملفات أو Google Drive")) { _, w ->
+                if (w == 0) showDeviceAudio(req) else {
+                    toast("للرجوع للتطبيق بدون اختيار: اضغط ✕ أو زر الرجوع")
+                    openPicker(req)
+                }
+            }.setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun openPicker(req: Int) {
         val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "audio/*"
@@ -1229,6 +1281,7 @@ class MainActivity : Activity() {
         const val REQ_LOC = 2
         const val REQ_SOUND = 3
         const val REQ_SOUND_FAJR = 4
+        const val REQ_AUDIO_PERM = 41
         const val REQ_EXPORT = 5
         const val REQ_IMPORT = 6
     }
