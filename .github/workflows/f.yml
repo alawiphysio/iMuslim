@@ -19,7 +19,7 @@ jobs:
           enc /tmp/r/media/Adhan-Makkah1.mp3 adhan_makkah
           enc /tmp/r/media/Adhan-fajr.mp3 fajr_makkah
           enc /tmp/r/media/Adhan-Madinah.mp3 adhan_madinah
-          enc "$(find /tmp/a -name "Athan_Mansoor_Az-Zahrani.mp3" | head -1)" adhan_zahrani
+          enc "$(find /tmp/a -iname "*Zahrani*.mp3" | head -1)" adhan_zahrani
           python - <<'PY' | tee out/check.txt
           from faster_whisper import WhisperModel
           import glob
