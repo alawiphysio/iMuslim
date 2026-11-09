@@ -69,7 +69,9 @@ class PrayerWidget : AppWidgetProvider() {
                 try { mgr.updateAppWidget(id, build(ctx, mgr, id, now)) } catch (e: Exception) { }
             }
             if (small.isNotEmpty()) {
-                try { mgr.updateAppWidget(small, buildSmall(ctx, now)) } catch (e: Exception) { }
+                val o = mgr.getAppWidgetOptions(small[0])
+                val wDp = (o?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH) ?: 0).takeIf { it > 0 } ?: 300
+                try { mgr.updateAppWidget(small, buildSmall(ctx, now, wDp)) } catch (e: Exception) { }
             }
             scheduleMinuteTick(ctx, now)
         }
@@ -93,16 +95,21 @@ class PrayerWidget : AppWidgetProvider() {
         }
 
         /** الويدجت الصغيرة (مناسبة للشاشة الخارجية للـ Fold) */
-        private fun buildSmall(ctx: Context, now: Long): RemoteViews {
+        private fun buildSmall(ctx: Context, now: Long, wDp: Int): RemoteViews {
             val st = Times.state(ctx, now)
             val rv = RemoteViews(ctx.packageName, R.layout.widget_small)
             val name = st.prayer.displayName(st.adhanT)
-            val mins = ((st.target - now + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
             rv.setTextViewText(R.id.s_name, if (st.iqamaPhase) "إقامة $name" else name)
-            rv.setTextViewText(R.id.s_time, if (st.iqamaPhase) "الإقامة ${Fmt.time(st.iqamaT)}" else "الأذان ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}")
-            rv.setTextViewText(R.id.s_min, Fmt.num(mins))
-            val scale = ctx.resources.displayMetrics.density.coerceAtMost(2.5f)
-            rv.setImageViewBitmap(R.id.s_ring, Art.widgetRing((62 * scale).toInt(), st.progress))
+            rv.setTextViewText(R.id.s_time, if (st.iqamaPhase) "أذّن ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}"
+                else "الأذان ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}")
+            // عدّ تنازلي حيّ: ساعات:دقائق:ثواني
+            val left = (st.target - now).coerceAtLeast(0L)
+            rv.setChronometer(R.id.s_count, android.os.SystemClock.elapsedRealtime() + left, null, true)
+            rv.setChronometerCountDown(R.id.s_count, true)
+            // مسار نقطة الوصول (بمقاس الويدجت الفعلي)
+            val d = ctx.resources.displayMetrics.density.coerceAtMost(2.5f)
+            val tw = ((wDp - 24) * d).toInt().coerceIn(200, 1600); val th = (22 * d).toInt()
+            rv.setImageViewBitmap(R.id.s_track, Art.journeyTrack(tw, th, st.progress, st.iqamaPhase))
             rv.setImageViewResource(R.id.s_figure, Pictures.figure(ctx, st.iqamaPhase))
             rv.setOnClickPendingIntent(R.id.s_root, PendingIntent.getActivity(ctx, 11, Intent(ctx, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))

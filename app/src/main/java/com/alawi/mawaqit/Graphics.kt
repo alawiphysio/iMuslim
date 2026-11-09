@@ -397,6 +397,43 @@ object Art {
     }
 
     // ---------------- صور الويدجت ----------------
+    /** مسار «نقطة الوصول»: من البيت (يمين) إلى المسجد (يسار)، والنقطة الذهبية تمشي مع الوقت */
+    fun journeyTrack(w: Int, h: Int, progress: Float, iqama: Boolean): Bitmap {
+        val bmp = Bitmap.createBitmap(w.coerceAtLeast(60), h.coerceAtLeast(16), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        val cy = h * 0.55f
+        val r = h * 0.22f
+        val endX = h * 0.75f            // المسجد على اليسار
+        val startX = w - h * 0.35f      // البداية على اليمين
+        val pr = progress.coerceIn(0f, 1f)
+        val dotX = startX - (startX - endX) * pr
+        // الطريق كامل (نقاط باهتة)
+        p.color = 0x40F4EFE1; p.strokeWidth = h * 0.08f; p.strokeCap = Paint.Cap.ROUND
+        var x = startX
+        while (x > endX) { c.drawPoint(x, cy, p); x -= h * 0.28f }
+        // المقطوع (ذهبي متدرج)
+        p.shader = LinearGradient(startX, 0f, dotX, 0f, 0xFFB8902E.toInt(), 0xFFF3D98B.toInt(), Shader.TileMode.CLAMP)
+        p.strokeWidth = h * 0.12f
+        c.drawLine(startX, cy, dotX, cy, p); p.shader = null
+        // نقطة البداية
+        p.color = 0xFFB8902E.toInt(); c.drawCircle(startX, cy, r * 0.55f, p)
+        // المسجد: قبة صغيرة + منارة
+        p.color = if (pr >= 0.999f) 0xFFF3D98B.toInt() else 0xFFD9B44A.toInt()
+        val base = cy + r * 1.1f
+        val dw = h * 0.42f
+        c.drawRect(endX - dw, base - h * 0.30f, endX + dw * 0.4f, base, p)
+        c.drawCircle(endX - dw * 0.3f, base - h * 0.30f, dw * 0.55f, p)
+        c.drawRect(endX + dw * 0.45f, base - h * 0.72f, endX + dw * 0.75f, base, p)
+        // النقطة المتحركة مع توهج
+        p.shader = RadialGradient(dotX, cy, r * 3f, intArrayOf(0x99FFE7A0.toInt(), 0x00FFE7A0), null, Shader.TileMode.CLAMP)
+        c.drawCircle(dotX, cy, r * 3f, p); p.shader = null
+        p.color = if (iqama) 0xFF7FE0A9.toInt() else 0xFFFFF3C4.toInt()
+        c.drawCircle(dotX, cy, r, p)
+        p.color = 0xFF0B231E.toInt(); c.drawCircle(dotX, cy, r * 0.4f, p)
+        return bmp
+    }
+
     fun widgetRing(sizePx: Int, progress: Float): Bitmap {
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
