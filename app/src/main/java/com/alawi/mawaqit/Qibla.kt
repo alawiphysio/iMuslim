@@ -146,6 +146,9 @@ class QiblaActivity : Activity(), SensorEventListener {
     private var declination = 0f
     private var qibla = 0f
     private var wasAligned = false
+    private lateinit var locTv: TextView
+    private lateinit var degTv: TextView
+    private val rotR = FloatArray(9)
     private val rot = FloatArray(9)
     private val orient = FloatArray(3)
 
@@ -154,8 +157,6 @@ class QiblaActivity : Activity(), SensorEventListener {
         val prefs = Prefs(this)
         val d = resources.displayMetrics.density
         fun dp(v: Int) = (v * d).toInt()
-        qibla = QiblaMath.bearing(prefs.lat, prefs.lng).toFloat()
-        declination = GeomagneticField(prefs.lat.toFloat(), prefs.lng.toFloat(), 0f, System.currentTimeMillis()).declination
 
         val frame = FrameLayout(this)
         frame.addView(SkyView(this), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -171,18 +172,74 @@ class QiblaActivity : Activity(), SensorEventListener {
         }
         col.addView(Nav.back(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         col.addView(tv("🕋 اتجاه القبلة", 28f, C_GOLD, true))
-        col.addView(tv("📍 ${prefs.city} • تبعد عن مكة ${Fmt.num(QiblaMath.distanceKm(prefs.lat, prefs.lng))} كم", 14f, C_TEXT))
+        locTv = tv("📍 جاري تحديد موقعك بدقة…", 14f, C_TEXT)
+        col.addView(locTv)
         compass = CompassView(this).apply { qibla = this@QiblaActivity.qibla }
         col.addView(compass, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(360)).also { it.topMargin = dp(20) })
         info = tv("", 22f, C_TEXT, true)
         col.addView(info)
         hint = tv("ضع الجوال مسطّح، ولفّ لين يصير السهم الذهبي فوق", 13f, 0xFFA9BDB4.toInt())
         col.addView(hint)
-        col.addView(tv("اتجاه القبلة ${Fmt.num(qibla.toInt())}° من الشمال الحقيقي", 12f, 0xFFA9BDB4.toInt()).apply { setPadding(0, dp(10), 0, 0) })
+        degTv = tv("", 12f, 0xFFA9BDB4.toInt()).apply { setPadding(0, dp(10), 0, 0) }
+        col.addView(degTv)
+        setLocation(prefs.lat, prefs.lng, false)
         frame.addView(col)
         setContentView(frame)
 
         sm = getSystemService(SensorManager::class.java)
+        fetchPreciseLocation()
+    }
+
+    /** نحسب القبلة من موقعك الدقيق (مهم جداً داخل مكة: الفرق بين حيّ وحيّ يغيّر الاتجاه كلياً) */
+    private fun setLocation(lat: Double, lng: Double, precise: Boolean) {
+        val km = QiblaMath.distanceKm(lat, lng)
+        qibla = QiblaMath.bearing(lat, lng).toFloat()
+        declination = GeomagneticField(lat.toFloat(), lng.toFloat(), 0f, System.currentTimeMillis()).declination
+        compass.qibla = qibla
+        compass.invalidate()
+        val m = FloatArray(1)
+        Location.distanceBetween(lat, lng, QiblaMath.KAABA_LAT, QiblaMath.KAABA_LNG, m)
+        locTv.text = when {
+            !precise -> "📍 جاري تحديد موقعك بدقة… (شغّل الموقع GPS)"
+            m[0] < 150 -> "🕋 أنت في المسجد الحرام، الكعبة قريبة منك جداً"
+            km < 1 -> "📍 تبعد عن الكعبة ${Fmt.num(m[0].toInt())} متر"
+            else -> "📍 تبعد عن الكعبة ${Fmt.num(km)} كم"
+        }
+        degTv.text = "اتجاه القبلة ${Fmt.num(qibla.toInt())}° من الشمال الحقيقي"
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun fetchPreciseLocation() {
+        val ok = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!ok) {
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 31)
+            return
+        }
+        val lm = getSystemService(android.location.LocationManager::class.java) ?: return
+        // آخر موقع معروف (سريع) ثم موقع GPS جديد (دقيق)
+        listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.FUSED_PROVIDER)
+            .mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }
+            .maxByOrNull { it.time }
+            ?.let { if (System.currentTimeMillis() - it.time < 10 * 60_000L) setLocation(it.latitude, it.longitude, true) }
+        val provider = when {
+            lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) -> android.location.LocationManager.GPS_PROVIDER
+            lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER) -> android.location.LocationManager.NETWORK_PROVIDER
+            else -> { locTv.text = "⚠️ شغّل الموقع (GPS) عشان اتجاه القبلة يكون دقيق"; return }
+        }
+        try {
+            lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
+                if (loc != null) {
+                    setLocation(loc.latitude, loc.longitude, true)
+                    // نحدّث موقع التطبيق كمان
+                    Prefs(this).lat = loc.latitude; Prefs(this).lng = loc.longitude
+                }
+            }
+        } catch (e: Exception) { }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.any { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) fetchPreciseLocation()
     }
 
     override fun onResume() {
@@ -198,7 +255,15 @@ class QiblaActivity : Activity(), SensorEventListener {
     }
 
     override fun onSensorChanged(e: SensorEvent) {
-        SensorManager.getRotationMatrixFromVector(rot, e.values)
+        SensorManager.getRotationMatrixFromVector(rotR, e.values)
+        // نراعي اتجاه الشاشة (مهم في الـ Fold: الشاشة الداخلية والخارجية مختلفة)
+        val r = if (android.os.Build.VERSION.SDK_INT >= 30) display?.rotation ?: 0 else @Suppress("DEPRECATION") windowManager.defaultDisplay.rotation
+        when (r) {
+            android.view.Surface.ROTATION_90 -> SensorManager.remapCoordinateSystem(rotR, SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X, rot)
+            android.view.Surface.ROTATION_180 -> SensorManager.remapCoordinateSystem(rotR, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y, rot)
+            android.view.Surface.ROTATION_270 -> SensorManager.remapCoordinateSystem(rotR, SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X, rot)
+            else -> System.arraycopy(rotR, 0, rot, 0, 9)
+        }
         SensorManager.getOrientation(rot, orient)
         val az = ((Math.toDegrees(orient[0].toDouble()).toFloat() + declination) + 360f) % 360f
         // تنعيم الحركة

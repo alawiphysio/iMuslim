@@ -115,7 +115,7 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
         <activity android:name=".HijriCalendarActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
-        <activity android:name=".QiblaActivity" android:exported="false" android:screenOrientation="portrait"
+        <activity android:name=".QiblaActivity" android:exported="false"
             android:configChanges="screenSize|screenLayout|smallestScreenSize" />
         <activity android:name=".TasbihActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
