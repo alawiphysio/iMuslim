@@ -93,6 +93,7 @@ class TasbihActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(16), dp(30), dp(16), dp(20))
         }
+        col.addView(Nav.back(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         col.addView(tv("📿 المسبحة", 28f, C_GOLD, true))
 
         // اختيار الذكر

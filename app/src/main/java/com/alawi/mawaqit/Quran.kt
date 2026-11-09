@@ -191,6 +191,7 @@ class QuranActivity : Activity() {
         scroll.addView(root)
         val amiri = resources.getFont(R.font.amiri_quran)
 
+        root.addView(Nav.back(this))
         root.addView(tv("المصحف الشريف", 32f, C_GOLD, true).apply { gravity = Gravity.CENTER; typeface = amiri })
         root.addView(tv("برواية حفص عن عاصم • الرسم العثماني", 12f, 0xFFA9BDB4.toInt()).apply { gravity = Gravity.CENTER })
 
@@ -454,14 +455,15 @@ class QuranReaderActivity : Activity() {
             setPadding(dp(10), dp(6), dp(10), dp(6))
             setOnClickListener { onClick() }
         }
-        bar.addView(btn("◀") { go(surah.n - 1) })
+        bar.addView(btn("→") { finish() })
+        bar.addView(btn("السابقة") { go(surah.n - 1) })
         bar.addView(TextView(this).apply {
             text = "سورة ${surah.name}"; textSize = 22f; setTextColor(accent); gravity = Gravity.CENTER; typeface = amiri
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(btn("أ−") { setFont(fontSize - 4f) })
         bar.addView(btn("أ+") { setFont(fontSize + 4f) })
         bar.addView(btn(if (paper) "🌙" else "📜") { paper = !paper; QuranPrefs.setPaper(this, paper); build(firstVisibleAyah()) })
-        bar.addView(btn("▶") { go(surah.n + 1) })
+        bar.addView(btn("التالية") { go(surah.n + 1) })
         root.addView(bar)
 
         list = ListView(this).apply {

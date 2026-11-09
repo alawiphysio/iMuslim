@@ -596,6 +596,31 @@ class RingView(ctx: Context) : View(ctx) {
     }
 }
 
+/** زر الرجوع اللي فوق في كل شاشة */
+object Nav {
+    fun back(a: android.app.Activity): View {
+        val d = a.resources.displayMetrics.density
+        val row = android.widget.LinearLayout(a).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val b = android.widget.TextView(a).apply {
+            text = "→  رجوع"
+            textSize = 16f
+            setTextColor(C_GOLD)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding((16 * d).toInt(), (8 * d).toInt(), (16 * d).toInt(), (8 * d).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 20 * d; setColor(0x26D9B44A); setStroke((1 * d).toInt(), 0x66D9B44A)
+            }
+            setOnClickListener { a.finish() }
+        }
+        Press.apply(b)
+        row.addView(b)
+        return row
+    }
+}
+
 /** تأثير الضغط: الزر يصغر شوي ويرجع بنعومة */
 object Press {
     fun apply(v: View) {
