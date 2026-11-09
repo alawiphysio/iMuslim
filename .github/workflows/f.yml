@@ -1,0 +1,25 @@
+name: Fetch audio
+on:
+  push:
+    branches: [ audio-fetch ]
+permissions:
+  contents: write
+jobs:
+  f:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p cand
+          for r in rehanhaider/adhan AalianKhan/adhans abodehq/Athan-MP3 mubaid/adhan kamranzafar/piprayer; do
+            d=$(echo $r | tr / _); git clone -q --depth 1 https://github.com/$r /tmp/$d || continue
+            find /tmp/$d -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.m4a' \) | while read f; do
+              n="${d}__$(basename "$f" | tr ' ' '_')"
+              dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+              echo "$n $(stat -c%s "$f") ${dur}s" | tee -a cand/list.txt
+              # نحفظ نسخة مضغوطة صغيرة للاستماع/التحليل
+              ffmpeg -v error -y -i "$f" -ac 1 -c:a libopus -b:a 32k "cand/$n.ogg"
+            done
+          done
+          git config user.name alawiphysio; git config user.email alawiphysio@users.noreply.github.com
+          git add cand && git commit -qm "cand [skip ci]" && git push
