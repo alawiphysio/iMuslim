@@ -105,7 +105,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         speech.add("يا ${prefs.userName}، لا تنسى وردك من القرآن اليوم.")
                         speechTitle = "ورد الختمة"; speechPrayer = p
                     }
-                    EvType.REFRESH -> { Travel.check(ctx); AyahWidget.updateAll(ctx) }
+                    EvType.REFRESH -> { Travel.check(ctx); AyahWidget.updateAll(ctx); Updater.checkInBackground(ctx) }
                 }
             } catch (e: Exception) {
                 // في حال منع النظام تشغيل الخدمة نرسل إشعار بالصوت على الأقل

@@ -129,6 +129,7 @@ class MainActivity : Activity() {
         super.onResume()
         minutesBigTv.animate().cancel(); minutesBigTv.alpha = 1f; minutesBigTv.translationY = 0f
         refresh()
+        Updater.checkInBackground(this)
         handler.post(ticker)
         silentLocationCheck()
     }
@@ -828,6 +829,16 @@ class MainActivity : Activity() {
         occ.addView(numberField("تذكير السحور قبل الفجر بـ (دقيقة)", prefs.suhoorMin, false) { prefs.suhoorMin = it.coerceIn(10, 180); reschedule() })
         occ.addView(switch("🌌 قيام الليل (الثلث الأخير)", prefs.qiyamOn) { prefs.qiyamOn = it; reschedule() })
         root.addView(occ)
+
+        // التحديثات
+        val up = card()
+        up.addView(header("🔄 التحديثات"))
+        up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق من التحديثات تلقائياً ويحمّلها، وتجيك رسالة «ثبّت التحديث».", 13f, MUTED))
+        up.addView(button("التحقق من التحديث الحين") {
+            if (Updater.readyVersion(this) > 0) startActivity(Intent(this, UpdateActivity::class.java))
+            else { toast("جاري التحقق…"); Updater.checkInBackground(this, true) { toast(it) } }
+        })
+        root.addView(up)
 
         // النسخ الاحتياطي والساعة
         val bk = card()
