@@ -169,6 +169,7 @@ class QiblaActivity : Activity(), SensorEventListener {
             text = s; textSize = size; setTextColor(color); gravity = Gravity.CENTER
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
+        col.addView(Nav.back(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         col.addView(tv("🕋 اتجاه القبلة", 28f, C_GOLD, true))
         col.addView(tv("📍 ${prefs.city} • تبعد عن مكة ${Fmt.num(QiblaMath.distanceKm(prefs.lat, prefs.lng))} كم", 14f, C_TEXT))
         compass = CompassView(this).apply { qibla = this@QiblaActivity.qibla }

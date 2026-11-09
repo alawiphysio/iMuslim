@@ -116,6 +116,7 @@ class AdhkarActivity : Activity() {
         val (frame, root) = Ui.screen(this)
         val d = { v: Int -> Ui.dp(this, v) }
 
+        root.addView(Nav.back(this))
         root.addView(Ui.tv(this, "🏰 حصن المسلم", 30f, Ui.GOLD, true).apply { gravity = Gravity.CENTER })
         root.addView(Ui.tv(this, "من أذكار الكتاب والسنة • سعيد بن علي بن وهف القحطاني", 12f, Ui.MUTED).apply { gravity = Gravity.CENTER })
         root.addView(Ui.tv(this, "بصوت: حمد الدريهم", 12f, Ui.MUTED).apply { gravity = Gravity.CENTER })
@@ -225,6 +226,7 @@ class AdhkarReaderActivity : Activity() {
         scroll = frame.findViewWithTag("scroll")
         val d = { v: Int -> Ui.dp(this, v) }
 
+        root.addView(Nav.back(this))
         root.addView(Ui.tv(this, cat.name, 26f, Ui.GOLD, true).apply { gravity = Gravity.CENTER })
         if (cat.id == Adhkar.ADHAN) {
             root.addView(Ui.tv(this, "🤲 الدعاء بين الأذان والإقامة لا يُرد، فاغتنم الوقت", 14f, 0xFFF6DE8D.toInt(), true).apply {

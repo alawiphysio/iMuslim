@@ -59,6 +59,7 @@ class HijriCalendarActivity : Activity() {
         }
         scroll.addView(root)
 
+        root.addView(Nav.back(this))
         root.addView(tv("📅 التقويم الهجري", 28f, C_GOLD, true).apply { gravity = Gravity.CENTER })
         root.addView(tv("حسب تقويم أم القرى", 12f, 0xFFA9BDB4.toInt()).apply { gravity = Gravity.CENTER })
 
