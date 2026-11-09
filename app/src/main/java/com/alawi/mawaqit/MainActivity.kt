@@ -525,7 +525,7 @@ class MainActivity : Activity() {
             it.gravity = Gravity.CENTER
             it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
         })
-        root.addView(tv("الصلاة يا مسلم", 13f, MUTED).also { it.gravity = Gravity.CENTER })
+        root.addView(tv("الصلاة يا مسلم  •  v${Updater.currentName(this)}", 13f, MUTED).also { it.gravity = Gravity.CENTER })
         cityTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
         dateTv = tv("", 13f, MUTED).also { it.gravity = Gravity.CENTER }
         root.addView(cityTv)
@@ -775,7 +775,7 @@ class MainActivity : Activity() {
 
         // التحديثات
         val up = card()
-        up.addView(header("🔄 تحديث البرنامج"))
+        up.addView(header("🔄 تحديث البرنامج • الإصدار ${Updater.currentName(this)}"))
         up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق كل ساعة، ويحمّل التحديث ويثبّته لحاله.", 13f, MUTED))
         up.addView(button("🔄 تحديث البرنامج") {
             startActivity(Intent(this, UpdateActivity::class.java))
@@ -1008,6 +1008,9 @@ class MainActivity : Activity() {
         })
         root.addView(bat)
 
+        root.addView(tv("i.Muslim • الإصدار ${Updater.currentName(this)}", 13f, GOLD, true).also {
+            it.gravity = Gravity.CENTER; it.setPadding(0, dp(18), 0, 0)
+        })
         root.addView(tv("أضف ويدجت «مواقيت الصلاة» من الشاشة الرئيسية: اضغط مطوّلاً ← الأدوات ← i.Muslim", 12f, MUTED).also {
             it.gravity = Gravity.CENTER; it.setPadding(0, dp(16), 0, 0)
         })
