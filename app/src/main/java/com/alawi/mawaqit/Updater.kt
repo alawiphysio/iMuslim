@@ -78,8 +78,20 @@ object Updater {
         if (url == null) return "ما فيه تحديث"
         val f = apkFile(app, latest) ?: return "ما فيه مساحة للتحديث"
         if (f.exists() && f.length() > 1_000_000) { notifyReady(app, latest); return "التحديث جاهز للتثبيت" }
-        if (sp(app).getLong("dl_ver", -1L) == latest) return "التحديث يتحمّل الحين…"
         val dm = app.getSystemService(DownloadManager::class.java) ?: return "ما قدرت أحمّل التحديث"
+        if (sp(app).getLong("dl_ver", -1L) == latest) {
+            // نتأكد إن التحميل السابق فعلاً شغال (ما علّق أو فشل)
+            val oldId = sp(app).getLong("dl_id", -1L)
+            var st = -1
+            dm.query(DownloadManager.Query().setFilterById(oldId))?.use { c ->
+                if (c.moveToFirst()) st = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            }
+            when (st) {
+                DownloadManager.STATUS_SUCCESSFUL -> { onDownloaded(app, oldId); return "التحديث جاهز للتثبيت" }
+                DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING -> return "التحديث يتحمّل الحين…"
+                else -> dm.remove(oldId)   // فشل أو انمسح: نعيد التحميل
+            }
+        }
         f.parentFile?.listFiles()?.forEach { it.delete() }
         val id = dm.enqueue(DownloadManager.Request(Uri.parse(url))
             .setTitle("تحديث i.Muslim")
