@@ -59,8 +59,9 @@ class AdhanActivity : Activity() {
         }
 
         val fig = ImageView(this).apply {
-            setImageResource(Pictures.walker(this@AdhanActivity))
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            val r = Pictures.walker(this@AdhanActivity)
+            setImageResource(r)
+            scaleType = if (r == R.drawable.fig_walker) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
             clipToOutline = true
             background = GradientDrawable().apply { setColor(0x22000000); cornerRadius = dp(28).toFloat() }
         }

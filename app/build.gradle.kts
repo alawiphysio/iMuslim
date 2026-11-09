@@ -11,8 +11,10 @@ android {
         applicationId = "com.alawi.mawaqit"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // رقم الإصدار يزيد تلقائياً مع كل بناء على GitHub، عشان التحديث يتثبت فوق القديم
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = run
+        versionName = "1.0.$run"
     }
 
     // مفتاح توقيع ثابت حتى تقدر تحدّث التطبيق بدون ما تحذفه
