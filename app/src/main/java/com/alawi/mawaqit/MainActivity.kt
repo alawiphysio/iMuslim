@@ -778,8 +778,7 @@ class MainActivity : Activity() {
         up.addView(header("🔄 تحديث البرنامج"))
         up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق كل ساعة، ويحمّل التحديث ويثبّته لحاله.", 13f, MUTED))
         up.addView(button("🔄 تحديث البرنامج") {
-            if (Updater.readyVersion(this) > 0) startActivity(Intent(this, UpdateActivity::class.java))
-            else { toast("جاري التحقق…"); Updater.checkInBackground(this, true) { toast(it) } }
+            startActivity(Intent(this, UpdateActivity::class.java))
         })
         root.addView(up)
 

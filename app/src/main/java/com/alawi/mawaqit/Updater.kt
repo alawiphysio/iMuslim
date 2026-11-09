@@ -57,6 +57,53 @@ object Updater {
         }.start()
     }
 
+    /** آخر إصدار على GitHub: (رقم، رابط) أو null */
+    fun fetchLatest(): Pair<Long, String>? {
+        val c = URL(API).openConnection() as HttpURLConnection
+        c.connectTimeout = 10_000; c.readTimeout = 10_000
+        c.setRequestProperty("Accept", "application/vnd.github+json")
+        c.setRequestProperty("User-Agent", "iMuslim-app")
+        if (c.responseCode != 200) { c.disconnect(); return null }
+        val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() }); c.disconnect()
+        val v = o.optString("tag_name").substringAfterLast('.').toLongOrNull() ?: return null
+        val assets = o.optJSONArray("assets") ?: return null
+        for (i in 0 until assets.length()) {
+            val a = assets.getJSONObject(i)
+            if (a.optString("name").endsWith(".apk")) return v to a.optString("browser_download_url")
+        }
+        return null
+    }
+
+    /** يبدأ التحميل (أو يرجع رقم التحميل الشغال) */
+    fun startDownload(app: Context, ver: Long, url: String): Long {
+        val dm = app.getSystemService(DownloadManager::class.java)
+        val s = sp(app)
+        if (s.getLong("dl_ver", -1L) == ver) {
+            val id = s.getLong("dl_id", -1L)
+            if (dmStatus(app, id)?.first in setOf(DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING, DownloadManager.STATUS_PAUSED, DownloadManager.STATUS_SUCCESSFUL)) return id
+            try { dm.remove(id) } catch (e: Exception) { }
+        }
+        apkFile(app, ver)?.parentFile?.listFiles()?.forEach { it.delete() }
+        val id = dm.enqueue(DownloadManager.Request(Uri.parse(url))
+            .setTitle("تحديث i.Muslim").setDescription("الإصدار 1.0.$ver")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            .setDestinationInExternalFilesDir(app, "update", "iMuslim-$ver.apk"))
+        s.edit().putLong("dl_id", id).putLong("dl_ver", ver).apply()
+        return id
+    }
+
+    /** (الحالة، المحمّل، الحجم) */
+    fun dmStatus(app: Context, id: Long): Triple<Int, Long, Long>? {
+        val dm = app.getSystemService(DownloadManager::class.java) ?: return null
+        dm.query(DownloadManager.Query().setFilterById(id))?.use { c ->
+            if (c.moveToFirst()) return Triple(
+                c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)),
+                c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)),
+                c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)))
+        }
+        return null
+    }
+
     private fun check(app: Context): String {
         val c = URL(API).openConnection() as HttpURLConnection
         c.connectTimeout = 10_000; c.readTimeout = 10_000
@@ -235,33 +282,100 @@ class UpdateDownloadReceiver : BroadcastReceiver() {
     }
 }
 
-/** شاشة التحديث */
+/** شاشة التحديث: تتحقق، تحمّل مع نسبة، وتفتح التثبيت مباشرة */
 class UpdateActivity : Activity() {
+    private val h = android.os.Handler(android.os.Looper.getMainLooper())
+    private lateinit var title: TextView
+    private lateinit var sub: TextView
+    private lateinit var bar: android.widget.ProgressBar
+    private lateinit var btn: TextView
+    private var ver = -1L
+    private var dlId = -1L
+    private var closed = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val d = resources.displayMetrics.density
-        val ver = Updater.readyVersion(this)
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
             setBackgroundColor(0xFF071814.toInt())
             setPadding((28 * d).toInt(), 0, (28 * d).toInt(), 0)
         }
         fun tv(s: String, size: Float, color: Int) = TextView(this).apply { text = s; textSize = size; setTextColor(color); gravity = Gravity.CENTER }
-        col.addView(tv("🎁", 64f, C_TEXT))
-        if (ver > 0) {
-            col.addView(tv("تحديث جديد جاهز", 26f, C_GOLD))
-            col.addView(tv("من ${Updater.currentName(this)} إلى 1.0.$ver", 15f, C_TEXT))
-            val b = tv("ثبّت التحديث الحين", 18f, 0xFF0B231E.toInt()).apply {
-                setPadding(0, (14 * d).toInt(), 0, (14 * d).toInt())
-                background = android.graphics.drawable.GradientDrawable().apply { setColor(C_GOLD); cornerRadius = 24 * d }
-                setOnClickListener { if (!Updater.install(this@UpdateActivity, ver)) Unit }
-            }
-            col.addView(b, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.topMargin = (24 * d).toInt() })
-            col.addView(tv("إعداداتك وصلواتك وختمتك تبقى كما هي", 12f, 0xFFA9BDB4.toInt()).apply { setPadding(0, (12 * d).toInt(), 0, 0) })
-        } else {
-            col.addView(tv("عندك آخر إصدار ✅", 22f, C_GOLD))
-            col.addView(tv(Updater.currentName(this), 14f, C_TEXT))
+        col.addView(tv("🔄", 60f, C_TEXT))
+        title = tv("جاري التحقق من التحديث…", 22f, C_GOLD); col.addView(title)
+        sub = tv("الإصدار الحالي: ${Updater.currentName(this)}", 14f, C_TEXT).apply { setPadding(0, (8 * d).toInt(), 0, 0) }
+        col.addView(sub)
+        bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; isIndeterminate = true
+            progressTintList = android.content.res.ColorStateList.valueOf(C_GOLD)
         }
+        col.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (10 * d).toInt()).also { it.topMargin = (20 * d).toInt() })
+        btn = tv("", 18f, 0xFF0B231E.toInt()).apply {
+            setPadding(0, (14 * d).toInt(), 0, (14 * d).toInt()); visibility = android.view.View.GONE
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(C_GOLD); cornerRadius = 24 * d }
+        }
+        col.addView(btn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.topMargin = (24 * d).toInt() })
+        col.addView(tv("إعداداتك وصلواتك وختمتك تبقى كما هي", 12f, 0xFFA9BDB4.toInt()).apply { setPadding(0, (12 * d).toInt(), 0, 0) })
+        col.addView(tv("→ رجوع", 15f, 0xFFA9BDB4.toInt()).apply {
+            setPadding(0, (24 * d).toInt(), 0, (8 * d).toInt()); setOnClickListener { finish() }
+        })
         setContentView(col)
+        check()
     }
+
+    private fun check() {
+        Thread {
+            val r = try { Updater.fetchLatest() } catch (e: Exception) { null }
+            h.post {
+                if (closed) return@post
+                if (r == null) { done("ما قدرت أتحقق", "تأكد من الإنترنت وجرب مرة ثانية", "إعادة المحاولة") { check() }; return@post }
+                val (v, url) = r
+                if (v <= Updater.currentVersion(this)) { done("عندك آخر إصدار ✅", "الإصدار ${Updater.currentName(this)}", null, null); return@post }
+                ver = v
+                val f = Updater.apkFile(this, v)
+                if (f != null && f.exists() && f.length() > 1_000_000 && Updater.dmStatus(this, getSharedPreferences("updater", 0).getLong("dl_id", -1))?.first != DownloadManager.STATUS_RUNNING) { ready(); return@post }
+                title.text = "جاري تحميل الإصدار 1.0.$v…"
+                dlId = try { Updater.startDownload(applicationContext, v, url) } catch (e: Exception) { -1 }
+                if (dlId < 0) { done("ما قدرت أحمّل", "جرب مرة ثانية", "إعادة المحاولة") { check() }; return@post }
+                poll()
+            }
+        }.start()
+    }
+
+    private fun poll() {
+        if (closed) return
+        val st = Updater.dmStatus(this, dlId)
+        when (st?.first) {
+            DownloadManager.STATUS_SUCCESSFUL -> {
+                getSharedPreferences("updater", 0).edit().remove("dl_id").remove("dl_ver").apply()
+                ready(); return
+            }
+            DownloadManager.STATUS_FAILED, null -> { done("فشل التحميل", "تأكد من الإنترنت وجرب مرة ثانية", "إعادة المحاولة") { check() }; return }
+            else -> {
+                val (_, got, total) = st
+                if (total > 0) { bar.isIndeterminate = false; bar.progress = (got * 100 / total).toInt()
+                    sub.text = "${got / 1_048_576} من ${total / 1_048_576} ميجا" }
+            }
+        }
+        h.postDelayed({ poll() }, 400)
+    }
+
+    private fun ready() {
+        bar.isIndeterminate = false; bar.progress = 100
+        title.text = "التحديث جاهز 🎁"
+        sub.text = "من ${Updater.currentName(this)} إلى 1.0.$ver"
+        btn.text = "ثبّت التحديث الحين"; btn.visibility = android.view.View.VISIBLE
+        btn.setOnClickListener { Updater.install(this, ver) }
+        Updater.install(this, ver)   // يفتح نافذة التثبيت مباشرة
+    }
+
+    private fun done(t: String, s: String, b: String?, act: (() -> Unit)?) {
+        bar.isIndeterminate = false; bar.progress = if (b == null) 100 else 0
+        title.text = t; sub.text = s
+        if (b != null && act != null) { btn.text = b; btn.visibility = android.view.View.VISIBLE; btn.setOnClickListener { btn.visibility = android.view.View.GONE; title.text = "جاري التحقق…"; bar.isIndeterminate = true; act() } }
+        else btn.visibility = android.view.View.GONE
+    }
+
+    override fun onDestroy() { closed = true; h.removeCallbacksAndMessages(null); super.onDestroy() }
 }
