@@ -56,7 +56,11 @@ class PrayerWidget : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, PrayerWidget::class.java)) ?: IntArray(0)
             val small = mgr.getAppWidgetIds(ComponentName(ctx, CompactWidget::class.java)) ?: IntArray(0)
-            if (ids.isEmpty() && small.isEmpty()) {
+            val bars = mgr.getAppWidgetIds(ComponentName(ctx, BarWidget::class.java)) ?: IntArray(0)
+            if (bars.isNotEmpty()) {
+                try { mgr.updateAppWidget(bars, buildBar(ctx, System.currentTimeMillis())) } catch (e: Exception) { }
+            }
+            if (ids.isEmpty() && small.isEmpty() && bars.isEmpty()) {
                 cancelMinuteTick(ctx)
                 return
             }
@@ -68,6 +72,24 @@ class PrayerWidget : AppWidgetProvider() {
                 try { mgr.updateAppWidget(small, buildSmall(ctx, now)) } catch (e: Exception) { }
             }
             scheduleMinuteTick(ctx, now)
+        }
+
+        /** الشريط: عدّ تنازلي حيّ بالساعات والدقائق والثواني + شريط تقدّم */
+        private fun buildBar(ctx: Context, now: Long): RemoteViews {
+            val st = Times.state(ctx, now)
+            val rv = RemoteViews(ctx.packageName, R.layout.widget_bar)
+            val name = st.prayer.displayName(st.adhanT)
+            rv.setTextViewText(R.id.b_name, if (st.iqamaPhase) "باقي على إقامة $name" else "باقي على أذان $name")
+            rv.setTextViewText(R.id.b_time, if (st.iqamaPhase) "أذّن ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}"
+                else "الأذان ${Fmt.time(st.adhanT)} • الإقامة ${Fmt.time(st.iqamaT)}")
+            val left = (st.target - now).coerceAtLeast(0L)
+            rv.setChronometer(R.id.b_count, android.os.SystemClock.elapsedRealtime() + left, null, true)
+            rv.setChronometerCountDown(R.id.b_count, true)
+            rv.setProgressBar(R.id.b_bar, 1000, (st.progress * 1000).toInt().coerceIn(0, 1000), false)
+            rv.setImageViewResource(R.id.b_figure, Pictures.figure(ctx, st.iqamaPhase))
+            rv.setOnClickPendingIntent(R.id.b_root, PendingIntent.getActivity(ctx, 12, Intent(ctx, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            return rv
         }
 
         /** الويدجت الصغيرة (مناسبة للشاشة الخارجية للـ Fold) */
@@ -185,6 +207,16 @@ class PrayerWidget : AppWidgetProvider() {
 
 /** ويدجت صغيرة: الصلاة القادمة + العدّاد (مناسبة للشاشة الخارجية) */
 class CompactWidget : AppWidgetProvider() {
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+        PrayerWidget.updateAll(ctx)
+        Scheduler.scheduleNext(ctx)
+    }
+    override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle?) {
+        PrayerWidget.updateAll(ctx)
+    }
+}
+
+class BarWidget : AppWidgetProvider() {
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
         PrayerWidget.updateAll(ctx)
         Scheduler.scheduleNext(ctx)

@@ -3,6 +3,7 @@
     <string name="app_name">i.Muslim</string>
     <string name="widget_name">مواقيت الصلاة</string>
     <string name="tasbih_widget">المسبحة</string>
+    <string name="bar_widget">شريط العدّ التنازلي (ساعة:دقيقة:ثانية)</string>
     <string name="small_widget">الصلاة القادمة (صغيرة)</string>
     <string name="ayah_widget">آية اليوم</string>
 </resources>

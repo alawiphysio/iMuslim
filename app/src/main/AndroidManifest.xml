@@ -81,6 +81,13 @@
                 android:resource="@xml/prayer_widget_info" />
         </receiver>
 
+        <receiver android:name=".BarWidget" android:exported="true" android:label="@string/bar_widget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/bar_widget_info" />
+        </receiver>
+
         <receiver android:name=".CompactWidget" android:exported="true" android:label="@string/small_widget">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
