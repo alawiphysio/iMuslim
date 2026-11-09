@@ -415,7 +415,46 @@ object Art {
 // =================== Views متحركة ===================
 
 /** سماء الليل: تدرج + نجوم تلمع + شهب */
-class SkyView(ctx: Context) : View(ctx) {
+/** صورة بحركة «كين برنز»: تكبير وتحريك بطيء جداً + تدرّج غامق تحت + عنوان ذهبي */
+class KenBurnsFrame(ctx: Context, radiusDp: Float = 24f) : android.widget.FrameLayout(ctx) {
+    val image = android.widget.ImageView(ctx).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP }
+    private val shadeV = View(ctx)
+    val title = android.widget.TextView(ctx).apply {
+        setTextColor(0xFFF3D98B.toInt()); textSize = 20f; gravity = android.view.Gravity.CENTER
+        try { typeface = ctx.resources.getFont(R.font.amiri_quran) } catch (e: Exception) {}
+        setShadowLayer(12f, 0f, 2f, 0xCC000000.toInt())
+    }
+    private var anim: android.animation.AnimatorSet? = null
+    init {
+        val d = ctx.resources.displayMetrics.density
+        clipToOutline = true
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = radiusDp * d; setColor(0x22000000) }
+        addView(image, LayoutParams(-1, -1))
+        shadeV.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(0x00000000, 0x00000000, 0xB0000000.toInt()))
+        addView(shadeV, LayoutParams(-1, -1))
+        addView(title, LayoutParams(-1, -2, android.view.Gravity.BOTTOM).also { it.bottomMargin = (10 * d).toInt() })
+        // إطار ذهبي رفيع
+        foreground = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = radiusDp * d; setStroke((1 * d).toInt().coerceAtLeast(1), 0x66E3C77B); setColor(0)
+        }
+    }
+    fun showTitle(t: String) { title.text = t; title.visibility = if (t.isEmpty()) GONE else VISIBLE; shadeV.visibility = title.visibility }
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        val sx = android.animation.ObjectAnimator.ofFloat(image, "scaleX", 1f, 1.10f)
+        val sy = android.animation.ObjectAnimator.ofFloat(image, "scaleY", 1f, 1.10f)
+        val tx = android.animation.ObjectAnimator.ofFloat(image, "translationX", 0f, -12f * resources.displayMetrics.density)
+        listOf(sx, sy, tx).forEach { it.repeatMode = android.animation.ValueAnimator.REVERSE; it.repeatCount = android.animation.ValueAnimator.INFINITE }
+        anim = android.animation.AnimatorSet().apply {
+            playTogether(sx, sy, tx); duration = 16000
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator(); start()
+        }
+    }
+    override fun onDetachedFromWindow() { anim?.cancel(); super.onDetachedFromWindow() }
+}
+
+class SkyView(ctx: Context, private val photoRes: Int = -1) : View(ctx) {
     private class Star(val x: Float, val y: Float, val r: Float, val speed: Float, val phase: Float)
 
     private val stars = ArrayList<Star>()
@@ -453,7 +492,8 @@ class SkyView(ctx: Context) : View(ctx) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         // صورة الموسم من Canva (لو موجودة)
         bgBitmap = null
-        val res = Pictures.seasonBg(context, Season.current())
+        // صورة الموسم، وفي الأيام العادية: الحرم ليلاً (أو صورة مخصّصة للصفحة)
+        val res = if (photoRes >= 0) photoRes else Pictures.seasonBg(context, Season.current()).takeIf { it != 0 } ?: Pictures.splash(context)
         if (res != 0 && w > 0 && h > 0) try {
             val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 }
             val b = android.graphics.BitmapFactory.decodeResource(resources, res, opts)
@@ -462,7 +502,7 @@ class SkyView(ctx: Context) : View(ctx) {
                 val scale = maxOf(w / b.width.toFloat(), (h * 1.15f) / b.height.toFloat())
                 bgMatrix.setScale(scale, scale)
                 bgMatrix.postTranslate((w - b.width * scale) / 2f, 0f)
-                shade.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x55000000, 0x99000000.toInt(), 0xCC000000.toInt()), null, Shader.TileMode.CLAMP)
+                shade.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x66000000, 0xAA000000.toInt(), 0xDD000000.toInt()), null, Shader.TileMode.CLAMP)
             }
         } catch (e: OutOfMemoryError) { bgBitmap = null }
         stars.clear()
@@ -484,6 +524,9 @@ class SkyView(ctx: Context) : View(ctx) {
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         bgBitmap?.let {
             c.save(); c.translate(0f, -parallax.coerceIn(0f, height * 0.12f))
+            // تكبير بطيء جداً يعطي إحساس بالحياة
+            val z = 1f + 0.05f * ((sin(t * 0.08f) + 1f) / 2f)
+            c.scale(z, z, width / 2f, height / 3f)
             c.drawBitmap(it, bgMatrix, null)
             c.restore()
             c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shade)

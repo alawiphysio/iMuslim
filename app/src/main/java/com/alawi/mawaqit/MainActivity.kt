@@ -62,6 +62,8 @@ class MainActivity : Activity() {
     private lateinit var figureIv: ImageView
     private var splashShown = false
     private lateinit var landmarkImg: ImageView
+    private lateinit var landmarkFrame: KenBurnsFrame
+    private lateinit var figureFrame: KenBurnsFrame
     private lateinit var betweenBtn: Button
     private val rowMark = HashMap<Prayer, TextView>()
     private lateinit var statsTv: TextView
@@ -187,8 +189,9 @@ class MainActivity : Activity() {
             // الرسمة المرسومة بالكود تنعرض كاملة، وصور Canva تملأ الإطار
             figureIv.scaleType = if (figRes == R.drawable.fig_walker || figRes == R.drawable.fig_praying)
                 ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
-            figureIv.alpha = 0f; figureIv.scaleX = 0.8f; figureIv.scaleY = 0.8f
-            figureIv.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
+            figureFrame.showTitle(if (st.iqamaPhase) "استعدّ للإقامة" else "حيّ على الصلاة")
+            figureFrame.alpha = 0f; figureFrame.scaleX = 0.85f; figureFrame.scaleY = 0.85f
+            figureFrame.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(700)
                 .setInterpolator(DecelerateInterpolator(2f)).start()
         }
         betweenBtn.text = if (st.iqamaPhase) "🤲 الدعاء بين الأذان والإقامة لا يُرد" else "📿 أذكار الأذان"
@@ -232,14 +235,16 @@ class MainActivity : Activity() {
         val lmImg = Pictures.landmark(this, lm)
         if (lmImg != 0) {
             landmarkImg.setImageResource(lmImg)
-            landmarkImg.visibility = View.VISIBLE
+            landmarkFrame.visibility = View.VISIBLE
+            landmarkFrame.showTitle(lm.title)
             landmarkView.visibility = View.GONE
+            landmarkTv.visibility = View.GONE
         } else {
-            landmarkImg.visibility = View.GONE
+            landmarkFrame.visibility = View.GONE
             landmarkView.visibility = View.VISIBLE
+            landmarkTv.text = lm.title
+            landmarkTv.visibility = if (lm.title.isEmpty()) View.GONE else View.VISIBLE
         }
-        landmarkTv.text = lm.title
-        landmarkTv.visibility = if (lm.title.isEmpty()) View.GONE else View.VISIBLE
         ringView.setProgress(st.progress, !ringIntroDone)
         ringIntroDone = true
         moonInfoTv.text = "الإضاءة ${Fmt.num(mp.illumination)}٪  •  عمر القمر ${Fmt.num(mp.ageDays.toInt() + 1)} يوم"
@@ -481,13 +486,9 @@ class MainActivity : Activity() {
         landmarkView = LandmarkView(this)
         root.addView(landmarkView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
-        landmarkImg = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            clipToOutline = true
-            background = rounded(0x22000000, 22f)
-            visibility = View.GONE
-        }
-        root.addView(landmarkImg, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)).also { it.topMargin = dp(10) })
+        landmarkFrame = KenBurnsFrame(this, 22f).apply { visibility = View.GONE }
+        landmarkImg = landmarkFrame.image
+        root.addView(landmarkFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(220)).also { it.topMargin = dp(10) })
         landmarkTv = tv("", 14f, GOLD, true).also { it.gravity = Gravity.CENTER }
         seasonCard = card().apply { visibility = View.GONE }
         root.addView(landmarkTv)
@@ -496,12 +497,9 @@ class MainActivity : Activity() {
         // بطاقة الصلاة القادمة: حلقة ذهبية والعدّاد داخلها
         val nextCard = card()
         nextCard.gravity = Gravity.CENTER_HORIZONTAL
-        figureIv = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            clipToOutline = true
-            background = rounded(0x22000000, 24f)
-        }
-        nextCard.addView(figureIv, LinearLayout.LayoutParams(dp(270), dp(270)).also { it.bottomMargin = dp(10); it.gravity = Gravity.CENTER_HORIZONTAL })
+        figureFrame = KenBurnsFrame(this, 26f)
+        figureIv = figureFrame.image
+        nextCard.addView(figureFrame, LinearLayout.LayoutParams(dp(280), dp(280)).also { it.bottomMargin = dp(12); it.gravity = Gravity.CENTER_HORIZONTAL })
         nextLabelTv = tv("الصلاة القادمة", 14f, MUTED).also { it.gravity = Gravity.CENTER }
         nextCard.addView(nextLabelTv)
         nextNameTv = tv("", 32f, GOLD, true).also { it.gravity = Gravity.CENTER }

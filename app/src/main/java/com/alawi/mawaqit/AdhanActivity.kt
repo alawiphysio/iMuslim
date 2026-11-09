@@ -45,7 +45,8 @@ class AdhanActivity : Activity() {
         val frame = FrameLayout(this)
         val bg = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF061512.toInt(), 0xFF0E3A30.toInt()))
         frame.background = bg
-        frame.addView(SkyView(this), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val lmPhoto = Pictures.landmark(this, Landmarks.detect(prefs.lat, prefs.lng)).takeIf { it != 0 } ?: Pictures.splash(this)
+        frame.addView(SkyView(this, lmPhoto), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
