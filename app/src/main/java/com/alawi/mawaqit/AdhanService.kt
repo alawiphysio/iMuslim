@@ -64,6 +64,7 @@ class AdhanService : Service() {
             startForeground(NOTIF_ID, n)
         }
 
+        if (mode == MODE_ADHAN) Diag.log(this, "خدمة الأذان اشتغلت${if (test) " (تجربة)" else ""}")
         release()
         when (mode) {
             MODE_SPEAK -> {

@@ -14,6 +14,13 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val prefs = Prefs(ctx)
         val t = intent.getLongExtra(Scheduler.EXTRA_TIME, System.currentTimeMillis())
+        if (intent.getBooleanExtra("test_adhan", false)) {
+            val p = Prayer.byKey(intent.getStringExtra(Scheduler.EXTRA_PRAYER)) ?: Prayer.DHUHR
+            Diag.log(ctx, "تجربة: المنبه اشتغل")
+            try { AdhanService.start(ctx, p, System.currentTimeMillis(), test = true); Diag.log(ctx, "تجربة: بدأ الأذان ✅") }
+            catch (e: Exception) { Diag.log(ctx, "تجربة: فشل تشغيل الأذان ❌ ${e.javaClass.simpleName}: ${e.message?.take(80)}") }
+            return
+        }
 
         // كل الأحداث اللي بنفس الوقت
         var evs = Scheduler.eventsAt(ctx, t)
@@ -36,7 +43,11 @@ class AlarmReceiver : BroadcastReceiver() {
             val p = ev.prayer
             try {
                 when (ev.type) {
-                    EvType.ADHAN -> if (p != null && prefs.adhanOn(p)) AdhanService.start(ctx, p, t)
+                    EvType.ADHAN -> if (p != null && prefs.adhanOn(p)) {
+                        Diag.log(ctx, "أذان ${p.displayName(t)}: المنبه اشتغل")
+                        AdhanService.start(ctx, p, t)
+                        Diag.log(ctx, "أذان ${p.displayName(t)}: بدأ ✅")
+                    } else if (p != null) Diag.log(ctx, "أذان ${p.displayName(t)}: مقفل من الإعدادات")
                     EvType.PRE -> if (p != null) {
                         val adhanT = t + prefs.preMin * 60_000L
                         val title = "باقي ${Fmt.num(prefs.preMin)} دقائق على أذان ${p.displayName(adhanT)}"
@@ -108,6 +119,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     EvType.REFRESH -> { Travel.check(ctx); AyahWidget.updateAll(ctx); Updater.checkInBackground(ctx) }
                 }
             } catch (e: Exception) {
+                Diag.log(ctx, "${ev.type} فشل ❌ ${e.javaClass.simpleName}: ${e.message?.take(80)}")
                 // في حال منع النظام تشغيل الخدمة نرسل إشعار بالصوت على الأقل
                 if (ev.type == EvType.ADHAN && p != null) Notifier.reminder(ctx, 203, "حان الآن موعد أذان ${p.displayName(t)}", prefs.city)
             }

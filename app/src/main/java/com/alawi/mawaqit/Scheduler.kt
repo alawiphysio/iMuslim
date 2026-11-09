@@ -181,6 +181,10 @@ object Scheduler {
         )
 
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+        if (ctx.getSharedPreferences("diag", Context.MODE_PRIVATE).getLong("last_sched", 0L) != ev.time) {
+            ctx.getSharedPreferences("diag", Context.MODE_PRIVATE).edit().putLong("last_sched", ev.time).apply()
+            Diag.log(ctx, "سجّلت ${ev.type}${ev.prayer?.let { " " + it.displayName(ev.time) } ?: ""} الساعة ${Fmt.time(ev.time)}${if (canExact) "" else " (غير دقيق ⚠️)"}")
+        }
         try {
             if (canExact) {
                 am.setAlarmClock(AlarmManager.AlarmClockInfo(ev.time, show), pi)

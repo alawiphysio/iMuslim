@@ -58,23 +58,23 @@ object Sadaqa {
         return LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(16), dp(6), dp(16), dp(7))
+            setPadding(dp(16), dp(3), dp(16), dp(4))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xF0071A15.toInt(), 0xFF04100D.toInt()))
             // خط ذهبي رفيع فوق
             addView(View(a).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                     intArrayOf(Color.TRANSPARENT, gold, Color.TRANSPARENT))
-            }, LinearLayout.LayoutParams(dp(180), dp(1)).also { it.bottomMargin = dp(5); it.gravity = Gravity.CENTER })
+            }, LinearLayout.LayoutParams(dp(120), dp(1)).also { it.bottomMargin = dp(2); it.gravity = Gravity.CENTER })
             addView(TextView(a).apply {
                 text = "🤍 $LINE1"
-                textSize = 12f; setTextColor(gold); gravity = Gravity.CENTER
-                typeface = font
+                textSize = 9f; setTextColor(gold); gravity = Gravity.CENTER
+                typeface = font; includeFontPadding = false; setLineSpacing(0f, 0.85f)
             })
             addView(TextView(a).apply {
                 text = LINE2
-                textSize = 13f; setTextColor(0xFFF3E9C8.toInt()); gravity = Gravity.CENTER
-                setTypeface(font, Typeface.BOLD)
+                textSize = 10f; setTextColor(0xFFF3E9C8.toInt()); gravity = Gravity.CENTER
+                setTypeface(font, Typeface.BOLD); includeFontPadding = false; setLineSpacing(0f, 0.85f)
             })
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             contentDescription = "$LINE1، $LINE2"

@@ -133,6 +133,8 @@ class MainActivity : Activity() {
         super.onResume()
         minutesBigTv.animate().cancel(); minutesBigTv.alpha = 1f; minutesBigTv.translationY = 0f
         refresh()
+        // حارس: نتأكد إن منبه الصلاة الجاي مسجّل دائماً
+        try { Scheduler.scheduleNext(this) } catch (e: Exception) { }
         Updater.checkInBackground(this)
         handler.post(ticker)
         silentLocationCheck()
@@ -900,6 +902,30 @@ class MainActivity : Activity() {
         voice.addView(vRow)
         voice.addView(tv("لو ما سمعت صوت عربي: الإعدادات ← الإدارة العامة ← تحويل النص إلى كلام، واختر محرك Google ولغة العربية.", 12f, MUTED))
         root.addView(voice)
+
+        // فحص الأذان
+        val diag = card()
+        diag.addView(header("🔧 فحص الأذان"))
+        val diagBody = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        diag.addView(diagBody)
+        fun fillDiag() {
+            diagBody.removeAllViews()
+            val iss = Diag.issues(this)
+            if (iss.isEmpty()) diagBody.addView(tv("✅ كل الأذونات تمام", 14f, 0xFF7FE0A9.toInt()))
+            for (i in iss) {
+                diagBody.addView(tv("⚠️ ${i.text}", 14f, 0xFFFFB27A.toInt()))
+                diagBody.addView(button("أصلحها", outline = true) { i.fix(this) })
+            }
+            diagBody.addView(tv(Diag.nextAlarmText(this), 13f, C_TEXT).also { it.setPadding(0, dp(8), 0, dp(4)) })
+            Diag.recent(this, 6).forEach { diagBody.addView(tv(it, 11f, MUTED)) }
+        }
+        fillDiag()
+        diag.addView(button("🔔 جرّب الأذان الحقيقي بعد دقيقة") {
+            Diag.scheduleTest(this); toast("قفل الشاشة وانتظر دقيقة… لازم يطلع الأذان")
+            handler.postDelayed({ fillDiag() }, 500)
+        })
+        diag.addView(button("تحديث الفحص", outline = true) { fillDiag() })
+        root.addView(diag)
 
         // البطارية
         val bat = card()
