@@ -2,19 +2,17 @@ name: Fetch images
 on:
   push:
     branches: [ img-fetch ]
+permissions:
+  contents: write
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: |
-          mkdir out
-          while read k w h u; do
-            curl -sS -o out/${k}_thumb.png "$u"; echo "$k thumb $(file -b out/${k}_thumb.png)"
-            big=$(echo "$u" | sed -E "s#height:[0-9]+#height:$h#; s#width:[0-9]+\?#width:$w?#; s#&x-canva-quality=thumbnail##")
-            curl -sS -o out/${k}.png "$big"; echo "$k big $(file -b out/${k}.png | head -c 80)"
-            big2=$(echo "$u" | sed -E "s#height:[0-9]+#height:$h#; s#width:[0-9]+\?#width:$w?#")
-            curl -sS -o out/${k}_b2.png "$big2"; echo "$k big2 $(file -b out/${k}_b2.png | head -c 80)"
+          mkdir -p out
+          while read k u; do
+            curl -sSf -o out/$k.png "$u" && echo "$k $(file -b out/$k.png | head -c 60)"
           done < urls.txt
-      - uses: actions/upload-artifact@v4
-        with: { name: imgs, path: out }
+          git config user.name alawiphysio; git config user.email alawiphysio@users.noreply.github.com
+          git add out && git commit -m "images [skip ci]" && git push
