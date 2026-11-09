@@ -49,7 +49,7 @@ object Updater {
     fun checkInBackground(ctx: Context, force: Boolean = false, onResult: ((String) -> Unit)? = null) {
         val app = ctx.applicationContext
         val last = sp(app).getLong("last_check", 0L)
-        if (!force && System.currentTimeMillis() - last < 6 * 3_600_000L) return
+        if (!force && System.currentTimeMillis() - last < 3_600_000L) return
         Thread {
             val msg = try { check(app) } catch (e: Exception) { "ما قدرت أتحقق من التحديث (تأكد من الإنترنت)" }
             sp(app).edit().putLong("last_check", System.currentTimeMillis()).apply()
@@ -77,7 +77,7 @@ object Updater {
         }
         if (url == null) return "ما فيه تحديث"
         val f = apkFile(app, latest) ?: return "ما فيه مساحة للتحديث"
-        if (f.exists() && f.length() > 1_000_000) { notifyReady(app, latest); return "التحديث جاهز للتثبيت" }
+        if (f.exists() && f.length() > 1_000_000) { autoInstall(app, latest); return "التحديث جاهز، جاري التثبيت…" }
         val dm = app.getSystemService(DownloadManager::class.java) ?: return "ما قدرت أحمّل التحديث"
         if (sp(app).getLong("dl_ver", -1L) == latest) {
             // نتأكد إن التحميل السابق فعلاً شغال (ما علّق أو فشل)
@@ -113,7 +113,7 @@ object Updater {
             if (c.moveToFirst()) ok = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL
         }
         s.edit().remove("dl_id").remove("dl_ver").apply()
-        if (ok) notifyReady(ctx, ver)
+        if (ok) autoInstall(ctx, ver)
     }
 
     fun readyVersion(ctx: Context): Long {
@@ -138,7 +138,63 @@ object Updater {
         try { nm.notify(NID, n) } catch (e: SecurityException) { }
     }
 
-    /** التثبيت عن طريق مثبّت أندرويد (يطلب منك تأكيد بضغطة) */
+    /** تثبيت تلقائي بدون ما تسوي شي (أندرويد 12+ بعد أول تحديث من داخل التطبيق).
+     *  لو أندرويد طلب تأكيد، يطلع لك إشعار «ثبّت التحديث». */
+    fun autoInstall(ctx: Context, ver: Long) {
+        if (!ctx.packageManager.canRequestPackageInstalls()) { notifyReady(ctx, ver); return }
+        try { if (!commit(ctx, ver, true)) notifyReady(ctx, ver) } catch (e: Exception) { notifyReady(ctx, ver) }
+    }
+
+    /** بعد ما يتحدث التطبيق لحاله: إشعار لطيف */
+    fun notifyUpdated(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        nm.createNotificationChannel(NotificationChannel(CH, "تحديثات التطبيق", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.cancel(NID)
+        val pi = PendingIntent.getActivity(ctx, 704, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val n = Notification.Builder(ctx, CH).setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("✨ تم تحديث i.Muslim").setContentText("الإصدار ${currentName(ctx)} — اضغط تشوف الجديد")
+            .setContentIntent(pi).setAutoCancel(true).setColor(C_GOLD).build()
+        try { nm.notify(NID + 1, n) } catch (e: SecurityException) { }
+    }
+
+    /** مرة وحدة: نطلب إذن «تثبيت التحديثات» عشان التحديث يصير تلقائي */
+    fun askAutoPermissionOnce(a: Activity) {
+        if (a.packageManager.canRequestPackageInstalls()) return
+        val s = sp(a); if (s.getBoolean("asked_perm", false)) return
+        s.edit().putBoolean("asked_perm", true).apply()
+        android.app.AlertDialog.Builder(a)
+            .setTitle("🔄 التحديث التلقائي")
+            .setMessage("عشان i.Muslim يتحدث لحاله بدون ما تسوي شي، اسمح له بتثبيت التحديثات (مرة وحدة بس).")
+            .setPositiveButton("اسمح") { _, _ ->
+                try { a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}"))) } catch (e: Exception) { }
+            }
+            .setNegativeButton("بعدين", null).show()
+    }
+
+    fun notifyReadyPublic(ctx: Context, ver: Long) = notifyReady(ctx, ver)
+
+    private fun commit(ctx: Context, ver: Long, auto: Boolean): Boolean {
+        val f = apkFile(ctx, ver) ?: return false
+        if (!f.exists()) return false
+        val pkg = ctx.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(ctx.packageName)
+        if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        val sid = pkg.createSession(params)
+        pkg.openSession(sid).use { session ->
+            session.openWrite("iMuslim.apk", 0, f.length()).use { out ->
+                f.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            val pi = PendingIntent.getBroadcast(ctx, if (auto) 703 else 702,
+                Intent(ctx, InstallResultReceiver::class.java).putExtra("auto", auto).putExtra("ver", ver),
+                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            session.commit(pi.intentSender)
+        }
+        return true
+    }
+
+    /** التثبيت من شاشة التحديث (بضغطة) */
     fun install(a: Activity, ver: Long): Boolean {
         val f = apkFile(a, ver) ?: return false
         if (!f.exists()) return false
@@ -147,20 +203,7 @@ object Updater {
             a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")))
             return false
         }
-        val pkg = a.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-        params.setAppPackageName(a.packageName)
-        val sid = pkg.createSession(params)
-        pkg.openSession(sid).use { session ->
-            session.openWrite("iMuslim.apk", 0, f.length()).use { out ->
-                f.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
-            }
-            val pi = PendingIntent.getBroadcast(a, 702, Intent(a, InstallResultReceiver::class.java),
-                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            session.commit(pi.intentSender)
-        }
-        return true
+        return commit(a, ver, false)
     }
 }
 
@@ -169,13 +212,17 @@ class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                // في التثبيت التلقائي ما نفتح نافذة فجأة: نطلع إشعار بدلها
+                if (intent.getBooleanExtra("auto", false)) {
+                    Updater.notifyReadyPublic(ctx, intent.getLongExtra("ver", -1L)); return
+                }
                 @Suppress("DEPRECATION")
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 try { ctx.startActivity(confirm) } catch (e: Exception) { }
             }
             PackageInstaller.STATUS_SUCCESS -> {}
-            else -> Toast.makeText(ctx, "ما تم التحديث: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""}", Toast.LENGTH_LONG).show()
+            else -> if (!intent.getBooleanExtra("auto", false)) Toast.makeText(ctx, "ما تم التحديث: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""}", Toast.LENGTH_LONG).show()
         }
     }
 }

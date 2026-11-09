@@ -140,6 +140,7 @@ class AlarmReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         Notifier.ensureChannels(ctx)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) Updater.notifyUpdated(ctx)
         try { AutoLocation.updateFromLastKnown(ctx) } catch (e: Exception) { }
         Scheduler.scheduleNext(ctx)
         PrayerWidget.updateAll(ctx)

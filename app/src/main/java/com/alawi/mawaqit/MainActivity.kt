@@ -116,6 +116,7 @@ class MainActivity : Activity() {
         Notifier.ensureChannels(this)
         setContentView(buildUi())
         window.decorView.postDelayed({ if (!isFinishing) Sadaqa.askNameOnce(this) }, 3500)
+        window.decorView.postDelayed({ if (!isFinishing) Updater.askAutoPermissionOnce(this) }, 9000)
 
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -832,7 +833,7 @@ class MainActivity : Activity() {
         // التحديثات
         val up = card()
         up.addView(header("🔄 التحديثات"))
-        up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق من التحديثات تلقائياً ويحمّلها، وتجيك رسالة «ثبّت التحديث».", 13f, MUTED))
+        up.addView(tv("الإصدار الحالي: ${Updater.currentName(this)} • التطبيق يتحقق كل ساعة، ويحمّل التحديث ويثبّته لحاله.", 13f, MUTED))
         up.addView(button("التحقق من التحديث الحين") {
             if (Updater.readyVersion(this) > 0) startActivity(Intent(this, UpdateActivity::class.java))
             else { toast("جاري التحقق…"); Updater.checkInBackground(this, true) { toast(it) } }
