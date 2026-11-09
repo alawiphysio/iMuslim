@@ -104,6 +104,7 @@ class MainActivity : Activity() {
     private var lastNextT = 0L
 
     private var shownLook: Look.Mode? = null
+    private var updatePrompted = false
     private val ticker = object : Runnable {
         override fun run() {
             tick()
@@ -137,6 +138,11 @@ class MainActivity : Activity() {
         // حارس: نتأكد إن منبه الصلاة الجاي مسجّل دائماً
         try { Scheduler.scheduleNext(this) } catch (e: Exception) { }
         Updater.checkInBackground(this)
+        // لو فيه تحديث محمّل وما قدر يتثبت لحاله: نفتح نافذة التثبيت مباشرة (مرة كل فتحة)
+        if (!updatePrompted && Updater.readyVersion(this) > 0) {
+            updatePrompted = true
+            handler.postDelayed({ if (!isFinishing) startActivity(Intent(this, UpdateActivity::class.java)) }, 1500)
+        }
         handler.post(ticker)
         silentLocationCheck()
     }
