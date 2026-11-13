@@ -104,7 +104,16 @@ class MainActivity : Activity() {
     private var lastNextT = 0L
 
     private var shownLook: Look.Mode? = null
-    private var updatePrompted = false
+    private var updateBanner: TextView? = null
+    private fun showUpdateBanner() {
+        val b = updateBanner ?: return
+        val v = Updater.readyVersion(this)
+        val hidden = getSharedPreferences("updater", 0).getLong("banner_hidden", -1L) == v
+        if (v > 0 && !hidden) {
+            b.text = "🎁 الإصدار 1.0.$v جاهز • اضغط للتثبيت   ✕"
+            b.visibility = View.VISIBLE
+        } else b.visibility = View.GONE
+    }
     private val ticker = object : Runnable {
         override fun run() {
             tick()
@@ -138,11 +147,8 @@ class MainActivity : Activity() {
         // حارس: نتأكد إن منبه الصلاة الجاي مسجّل دائماً
         try { Scheduler.scheduleNext(this) } catch (e: Exception) { }
         Updater.checkInBackground(this)
-        // لو فيه تحديث محمّل وما قدر يتثبت لحاله: نفتح نافذة التثبيت مباشرة (مرة كل فتحة)
-        if (!updatePrompted && Updater.readyVersion(this) > 0) {
-            updatePrompted = true
-            handler.postDelayed({ if (!isFinishing) startActivity(Intent(this, UpdateActivity::class.java)) }, 1500)
-        }
+        // تحديث جاهز؟ شريط صغير هادئ فوق (بدون ما يقاطعك)
+        showUpdateBanner()
         handler.post(ticker)
         silentLocationCheck()
     }
@@ -532,6 +538,23 @@ class MainActivity : Activity() {
             it.setShadowLayer(dp(10).toFloat(), 0f, 0f, 0x88D9B44A.toInt())
         })
         root.addView(tv("الصلاة يا مسلم  •  v${Updater.currentName(this)}", 13f, MUTED).also { it.gravity = Gravity.CENTER })
+        updateBanner = tv("", 13f, 0xFF0B231E.toInt(), true).apply {
+            gravity = Gravity.CENTER; visibility = View.GONE
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = rounded(GOLD, 18f)
+            setOnTouchListener { v, e ->
+                if (e.action == android.view.MotionEvent.ACTION_UP) {
+                    // ✕ على الطرف الأيسر = إخفاء لهذا الإصدار، غير كذا = تثبيت
+                    if (e.x < v.width * 0.18f) {
+                        getSharedPreferences("updater", 0).edit().putLong("banner_hidden", Updater.readyVersion(this@MainActivity)).apply()
+                        v.visibility = View.GONE
+                    } else startActivity(Intent(this@MainActivity, UpdateActivity::class.java))
+                }
+                true
+            }
+        }
+        root.addView(updateBanner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(6) })
         cityTv = tv("", 15f, TEXT).also { it.gravity = Gravity.CENTER }
         dateTv = tv("", 13f, MUTED).also { it.gravity = Gravity.CENTER }
         root.addView(cityTv)

@@ -165,8 +165,15 @@ object Updater {
 
     fun readyVersion(ctx: Context): Long {
         val dir = ctx.getExternalFilesDir("update") ?: return -1
-        val v = dir.listFiles()?.mapNotNull { it.name.removePrefix("iMuslim-").removeSuffix(".apk").toLongOrNull() }?.maxOrNull() ?: return -1
-        return if (v > currentVersion(ctx)) v else -1
+        val files = dir.listFiles() ?: return -1
+        // ننظف ملفات الإصدارات اللي تثبتت خلاص
+        val cur = currentVersion(ctx)
+        files.forEach { f -> f.name.removePrefix("iMuslim-").removeSuffix(".apk").toLongOrNull()?.let { if (it <= cur) f.delete() } }
+        // جاهز = الملف كامل والتحميل مو شغال
+        if (sp(ctx).getLong("dl_id", -1L) >= 0) return -1
+        val v = files.filter { it.exists() && it.length() > 1_000_000 }
+            .mapNotNull { it.name.removePrefix("iMuslim-").removeSuffix(".apk").toLongOrNull() }.maxOrNull() ?: return -1
+        return if (v > cur) v else -1
     }
 
     private fun notifyReady(ctx: Context, ver: Long) {
